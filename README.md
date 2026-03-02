@@ -6,7 +6,7 @@
 <p align="center"><strong>PySpark, unleashed.</strong></p>
 
 <p align="center">
-  <a href="https://raiju.sh"><img src="https://img.shields.io/badge/docs-raiju.sh-blue?logo=https://raw.githubusercontent.com/seanpavlak/raiju/refs/heads/main/assets/favicon.ico" alt="Documentation" /></a>
+  <a href="https://raiju.sh"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/seanpavlak/raiju/refs/heads/main/assets/badge.json" alt="Documentation" /></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT" /></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.9+-blue.svg" alt="Python 3.9+" /></a>
   <a href="https://github.com/astral-sh/ruff"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json" alt="Ruff" /></a>
