@@ -1,0 +1,69 @@
+# Raiju
+
+A PySpark wrapper that **implicitly** exposes all PySpark functionality. Nothing is hardcoded — the wrapper delegates to PySpark via a thin proxy, so every SparkSession API (current and future) works through Raiju by default. You get the full PySpark surface area for free; we then build on top of it.
+
+## Installation
+
+```bash
+pip install -r requirements.txt
+```
+
+Or install the package in development mode:
+
+```bash
+pip install -e .
+```
+
+## Usage
+
+Use `Raiju` as your entry point instead of `SparkSession`. All PySpark usage stays the same.
+
+### Create a session (builder)
+
+```python
+from raiju import Raiju
+
+raiju = Raiju.builder.appName("my_app").master("local[*]").getOrCreate()
+```
+
+### Use PySpark as usual
+
+Everything is forwarded to the underlying SparkSession:
+
+```python
+# SQL
+df = raiju.sql("SELECT 1 as one")
+
+# DataFrame API
+df = raiju.range(10).filter("id > 5")
+
+# Read data
+df = raiju.read.csv("path/to/file.csv", header=True)
+
+# Catalog, UDFs, config, etc.
+raiju.catalog.listTables()
+raiju.udf.register(...)
+raiju.conf.set("key", "value")
+```
+
+Any attribute or method available on `SparkSession` is available on `Raiju` without being explicitly defined — it comes for free via delegation.
+
+### Wrap an existing SparkSession
+
+When you already have a `SparkSession` (e.g. in Databricks, where `spark` is provided):
+
+```python
+from raiju import Raiju
+
+raiju = Raiju(spark)
+```
+
+## Design
+
+- **No hardcoded PySpark surface**: `Raiju` and `_RaijuBuilder` use `__getattr__` to forward to the real SparkSession (and builder). New or existing SparkSession APIs work without code changes in Raiju.
+- **Single entry point**: You get a `Raiju` instance; from there you use `.read`, `.sql`, `.range`, etc. as in PySpark. Returned objects (e.g. DataFrames) are standard PySpark types so all of PySpark remains available.
+- **Foundation for extensions**: This layer establishes the wrapper; additional behavior can be layered on top without reimplementing PySpark.
+
+## License
+
+See repository license.

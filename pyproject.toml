@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "raiju"
+version = "0.1.0"
+description = "A PySpark wrapper that implicitly exposes all PySpark functionality"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "pyspark>=4.0.0",
+]
+
+[project.optional-dependencies]
+dev = []
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["raiju*"]
