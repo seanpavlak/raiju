@@ -1,8 +1,10 @@
 # Raiju
 
 [![Documentation](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/seanpavlak/raiju/refs/heads/main/assets/badge.json)](https://raiju.sh)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![PyPI version](https://img.shields.io/pypi/v/raiju.svg)](https://pypi.org/project/raiju/)
+[![PyPI license](https://img.shields.io/pypi/l/raiju.svg)](https://pypi.org/project/raiju/)
+[![PyPI Python versions](https://img.shields.io/pypi/pyversions/raiju.svg)](https://pypi.org/project/raiju/)
+[![CI](https://github.com/seanpavlak/raiju/workflows/CI/badge.svg)](https://github.com/seanpavlak/raiju/actions)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
 [**Docs**](https://raiju.sh)
