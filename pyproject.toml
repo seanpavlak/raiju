@@ -16,12 +16,21 @@ dependencies = [
 dev = [
     "pre-commit>=3.0.0",
     "pytest>=8.0",
+    "pytest-cov>=4.0.0",
     "ruff>=0.8.0",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+
+[tool.coverage.run]
+source = ["raiju"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = ["def __getattr__"]
+show_missing = true
 
 [tool.ruff]
 target-version = "py39"

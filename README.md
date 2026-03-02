@@ -5,6 +5,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![CI](https://github.com/seanpavlak/raiju/actions/workflows/ci.yml/badge.svg)](https://github.com/seanpavlak/raiju/actions)
+[![codecov](https://codecov.io/gh/seanpavlak/raiju/graph/badge.svg)](https://codecov.io/gh/seanpavlak/raiju)
+[![Discussions](https://img.shields.io/github/discussions/seanpavlak/raiju)](https://github.com/seanpavlak/raiju/discussions)
+[![Latest release](https://img.shields.io/github/v/release/seanpavlak/raiju)](https://github.com/seanpavlak/raiju/releases)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
 [**Docs**](https://raiju.sh)
