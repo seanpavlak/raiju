@@ -7,7 +7,7 @@
 [![CI](https://github.com/seanpavlak/raiju/actions/workflows/ci.yml/badge.svg)](https://github.com/seanpavlak/raiju/actions)
 [![codecov](https://codecov.io/gh/seanpavlak/raiju/graph/badge.svg)](https://codecov.io/gh/seanpavlak/raiju)
 [![Discussions](https://img.shields.io/github/discussions/seanpavlak/raiju)](https://github.com/seanpavlak/raiju/discussions)
-[![Latest release](https://img.shields.io/github/v/release/seanpavlak/raiju)](https://github.com/seanpavlak/raiju/releases)
+[![Release v0.1.0](https://img.shields.io/badge/release-v0.1.0-blue.svg)](https://github.com/seanpavlak/raiju/releases)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
 [**Docs**](https://raiju.sh)
