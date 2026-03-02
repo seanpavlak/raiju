@@ -1,8 +1,37 @@
-# Raiju
+<p align="center">
+  <img src="assets/icon.png" width="120" alt="Raiju" />
+</p>
 
-A PySpark wrapper that **implicitly** exposes all PySpark functionality. Nothing is hardcoded — the wrapper delegates to PySpark via a thin proxy, so every SparkSession API (current and future) works through Raiju by default. You get the full PySpark surface area for free; we then build on top of it.
+<h1 align="center">Raiju</h1>
+<p align="center"><strong>PySpark, unleashed.</strong></p>
 
-**Requirements:** Python 3.9+, PySpark 4.0+
+<p align="center">
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT" /></a>
+  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.9+-blue.svg" alt="Python 3.9+" /></a>
+  <a href="https://github.com/astral-sh/ruff"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json" alt="Ruff" /></a>
+</p>
+
+---
+
+## What is Raiju?
+
+**Raiju** (雷獣, *raijū*) is a creature from Japanese folklore—a lightning beast and companion of the thunder god Raijin. It’s said to take the form of a wolf, cat, or weasel wrapped in lightning, and to descend with storms. The name means “thunder animal”: 雷 (*rai*, thunder) + 獣 (*jū*, beast).
+
+This project borrows the name because it wraps **PySpark**—your engine for lightning-fast, distributed data—in a thin, flexible layer. All of Spark’s power is still there; Raiju is the interface that carries it.
+
+---
+
+## Features
+
+- **Full PySpark surface** — Every `SparkSession` API is available through Raiju via delegation. Nothing is reimplemented or locked in; new and future PySpark APIs work automatically.
+- **Drop-in entry point** — Use `Raiju` instead of `SparkSession`. Same builder, same methods, same DataFrames.
+- **Works everywhere** — Create a new session with the builder or wrap an existing one (e.g. `spark` in Databricks).
+- **Extension-ready** — A minimal foundation you can build on without forking PySpark.
+
+## Requirements
+
+- **Python** 3.9+
+- **PySpark** 4.0+
 
 ## Installation
 
@@ -10,23 +39,21 @@ A PySpark wrapper that **implicitly** exposes all PySpark functionality. Nothing
 pip install -e .
 ```
 
-Or install from requirements only:
+Or from requirements only:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-For development (includes [Ruff](https://docs.astral.sh/ruff/) for linting and formatting):
+For development (linting, formatting, tests):
 
 ```bash
 pip install -e ".[dev]"
 ```
 
-## Usage
+## Quick Start
 
-Use `Raiju` as your entry point instead of `SparkSession`. All PySpark usage stays the same.
-
-### Create a session (builder)
+**Create a session (builder):**
 
 ```python
 from raiju import Raiju
@@ -34,9 +61,7 @@ from raiju import Raiju
 raiju = Raiju.builder.appName("my_app").master("local[*]").getOrCreate()
 ```
 
-### Wrap an existing SparkSession
-
-When you already have a `SparkSession` (e.g. in Databricks, where `spark` is provided):
+**Or wrap an existing session** (e.g. in Databricks):
 
 ```python
 from raiju import Raiju
@@ -44,9 +69,7 @@ from raiju import Raiju
 raiju = Raiju(spark)
 ```
 
-### Use PySpark as usual
-
-Everything is forwarded to the underlying SparkSession:
+**Use it like PySpark:**
 
 ```python
 # SQL
@@ -58,17 +81,14 @@ df = raiju.range(10).filter("id > 5")
 # Read data
 df = raiju.read.csv("path/to/file.csv", header=True)
 
-# Catalog, UDFs, config, etc.
+# Catalog, UDFs, config — everything is forwarded
 raiju.catalog.listTables()
-raiju.udf.register(...)
 raiju.conf.set("key", "value")
 ```
 
-Any attribute or method available on `SparkSession` is available on `Raiju` without being explicitly defined — it comes for free via delegation.
+Any attribute or method on `SparkSession` is available on your `Raiju` instance; it’s all delegated, so you get the full API for free.
 
 ## Development
-
-Install with dev dependencies, then lint, format, and test:
 
 ```bash
 pip install -e ".[dev]"
@@ -77,12 +97,12 @@ ruff format raiju/ tests/
 pytest tests/ -v
 ```
 
-## Design
+## How It Works
 
-- **No hardcoded PySpark surface**: `Raiju` and `_RaijuBuilder` use `__getattr__` to forward to the real SparkSession (and builder). New or existing SparkSession APIs work without code changes in Raiju.
-- **Single entry point**: You get a `Raiju` instance; from there you use `.read`, `.sql`, `.range`, etc. as in PySpark. Returned objects (e.g. DataFrames) are standard PySpark types so all of PySpark remains available.
-- **Foundation for extensions**: This layer establishes the wrapper; additional behavior can be layered on top without reimplementing PySpark.
+- **No hardcoded API** — `Raiju` and its builder use `__getattr__` to forward to the real `SparkSession` (and `SparkSession.builder`). New PySpark methods and options work without changes to Raiju.
+- **Single entry point** — You get a `Raiju` instance; `.read`, `.sql`, `.range`, and everything else behave as in PySpark. Returned objects (DataFrames, etc.) are standard PySpark types.
+- **Thin wrapper** — This layer is the base; you can add behavior on top without reimplementing Spark.
 
 ## License
 
-See repository license.
+MIT License. See [LICENSE](LICENSE).
