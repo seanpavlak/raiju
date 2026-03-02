@@ -2,16 +2,24 @@
 
 A PySpark wrapper that **implicitly** exposes all PySpark functionality. Nothing is hardcoded — the wrapper delegates to PySpark via a thin proxy, so every SparkSession API (current and future) works through Raiju by default. You get the full PySpark surface area for free; we then build on top of it.
 
+**Requirements:** Python 3.9+, PySpark 4.0+
+
 ## Installation
+
+```bash
+pip install -e .
+```
+
+Or install from requirements only:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Or install the package in development mode:
+For development (includes [Ruff](https://docs.astral.sh/ruff/) for linting and formatting):
 
 ```bash
-pip install -e .
+pip install -e ".[dev]"
 ```
 
 ## Usage
@@ -24,6 +32,16 @@ Use `Raiju` as your entry point instead of `SparkSession`. All PySpark usage sta
 from raiju import Raiju
 
 raiju = Raiju.builder.appName("my_app").master("local[*]").getOrCreate()
+```
+
+### Wrap an existing SparkSession
+
+When you already have a `SparkSession` (e.g. in Databricks, where `spark` is provided):
+
+```python
+from raiju import Raiju
+
+raiju = Raiju(spark)
 ```
 
 ### Use PySpark as usual
@@ -48,14 +66,13 @@ raiju.conf.set("key", "value")
 
 Any attribute or method available on `SparkSession` is available on `Raiju` without being explicitly defined — it comes for free via delegation.
 
-### Wrap an existing SparkSession
+## Development
 
-When you already have a `SparkSession` (e.g. in Databricks, where `spark` is provided):
+Lint and format with Ruff:
 
-```python
-from raiju import Raiju
-
-raiju = Raiju(spark)
+```bash
+ruff check raiju/
+ruff format raiju/
 ```
 
 ## Design

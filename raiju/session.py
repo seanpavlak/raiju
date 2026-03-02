@@ -15,11 +15,11 @@ class _RaijuBuilder:
         attr = getattr(SparkSession.builder, name)
         if name == "getOrCreate":
 
-            def getOrCreate(*args, **kwargs):
+            def _wrapped_get_or_create(*args, **kwargs):
                 spark = SparkSession.builder.getOrCreate(*args, **kwargs)
                 return Raiju(spark)
 
-            return getOrCreate
+            return _wrapped_get_or_create
         return attr
 
 
