@@ -1,3 +1,14 @@
+Metadata-Version: 2.4
+Name: raiju
+Version: 0.1.0
+Summary: A PySpark wrapper that implicitly exposes all PySpark functionality
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+Requires-Dist: pyspark>=4.0.0
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0; extra == "dev"
+Requires-Dist: ruff>=0.8.0; extra == "dev"
+
 # Raiju
 
 A PySpark wrapper that **implicitly** exposes all PySpark functionality. Nothing is hardcoded — the wrapper delegates to PySpark via a thin proxy, so every SparkSession API (current and future) works through Raiju by default. You get the full PySpark surface area for free; we then build on top of it.
