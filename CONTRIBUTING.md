@@ -11,11 +11,10 @@ Contributions are welcome and appreciated.
    pip install -e ".[dev]"
    ```
 
-3. Run the linter and formatter:
+3. Install the pre-commit hooks (Ruff will run on commit):
 
    ```shell
-   ruff check raiju/ tests/
-   ruff format raiju/ tests/
+   pre-commit install
    ```
 
 4. Run the test suite:
