@@ -6,7 +6,7 @@
 <p align="center"><strong>PySpark, unleashed.</strong></p>
 
 <p align="center">
-  <a href="https://raiju.sh"><img src="https://img.shields.io/badge/docs-raiju.sh-blue?logo=https%3A%2F%2Fraw.githubusercontent.com%2Fseanpavlak%2Fraiju%2Fmain%2Fassets%2Ffavicon.ico" alt="Documentation" /></a>
+  <a href="https://raiju.sh"><img src="https://img.shields.io/badge/docs-raiju.sh-blue?logo=https%3A%2F%2Fraw.githubusercontent.com%2Fseanpavlak%2Fraiju%2Frefs%2Fheads%2Fmain%2Fassets%2Ffavicon.ico" alt="Documentation" /></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT" /></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.9+-blue.svg" alt="Python 3.9+" /></a>
   <a href="https://github.com/astral-sh/ruff"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json" alt="Ruff" /></a>
@@ -16,18 +16,18 @@
 
 ## What is Raiju?
 
-**Raiju** (雷獣, *raijū*) is a creature from Japanese folklore—a lightning beast and companion of the thunder god Raijin. It’s said to take the form of a wolf, cat, or weasel wrapped in lightning, and to descend with storms. The name means “thunder animal”: 雷 (*rai*, thunder) + 獣 (*jū*, beast).
+**Raiju** (雷獣, *raijū*) is a creature from Japanese folklore, a lightning beast and companion of the thunder god Raijin. It’s said to take the form of a wolf, cat, weasel, or in this case a fox wrapped in lightning, and to descend with storms. The name means “thunder animal”: 雷 (*rai*, thunder) + 獣 (*jū*, beast).
 
-This project borrows the name because it wraps **PySpark**—your engine for lightning-fast, distributed data—in a thin, flexible layer. All of Spark’s power is still there; Raiju is the interface that carries it.
+This project borrows the name because it wraps **PySpark**, your engine for lightning-fast, distributed data, in a thin, flexible layer. All of Spark’s power is still there; Raiju is the interface that carries it.
 
 ---
 
 ## Features
 
-- **Full PySpark surface** — Every `SparkSession` API is available through Raiju via delegation. Nothing is reimplemented or locked in; new and future PySpark APIs work automatically.
-- **Drop-in entry point** — Use `Raiju` instead of `SparkSession`. Same builder, same methods, same DataFrames.
-- **Works everywhere** — Create a new session with the builder or wrap an existing one (e.g. `spark` in Databricks).
-- **Extension-ready** — A minimal foundation you can build on without forking PySpark.
+- **Full PySpark surface:** Every `SparkSession` API is available through Raiju via delegation. Nothing is reimplemented or locked in; new and future PySpark APIs work automatically.
+- **Drop-in entry point:** Use `Raiju` instead of `SparkSession`. Same builder, same methods, same DataFrames.
+- **Works everywhere:** Create a new session with the builder or wrap an existing one (e.g. `spark` in Databricks).
+- **Extension-ready:** A minimal foundation you can build on without forking PySpark.
 
 ## Requirements
 
@@ -82,7 +82,7 @@ df = raiju.range(10).filter("id > 5")
 # Read data
 df = raiju.read.csv("path/to/file.csv", header=True)
 
-# Catalog, UDFs, config — everything is forwarded
+# Catalog, UDFs, config; everything is forwarded
 raiju.catalog.listTables()
 raiju.conf.set("key", "value")
 ```
@@ -100,9 +100,9 @@ pytest tests/ -v
 
 ## How It Works
 
-- **No hardcoded API** — `Raiju` and its builder use `__getattr__` to forward to the real `SparkSession` (and `SparkSession.builder`). New PySpark methods and options work without changes to Raiju.
-- **Single entry point** — You get a `Raiju` instance; `.read`, `.sql`, `.range`, and everything else behave as in PySpark. Returned objects (DataFrames, etc.) are standard PySpark types.
-- **Thin wrapper** — This layer is the base; you can add behavior on top without reimplementing Spark.
+- **No hardcoded API:** `Raiju` and its builder use `__getattr__` to forward to the real `SparkSession` (and `SparkSession.builder`). New PySpark methods and options work without changes to Raiju.
+- **Single entry point:** You get a `Raiju` instance; `.read`, `.sql`, `.range`, and everything else behave as in PySpark. Returned objects (DataFrames, etc.) are standard PySpark types.
+- **Thin wrapper:** This layer is the base; you can add behavior on top without reimplementing Spark.
 
 ## License
 
