@@ -2,6 +2,8 @@
 
 Contributions are welcome and appreciated.
 
+Maintainers: see [MAINTAINING.md](MAINTAINING.md) for release steps and one-time setup (Dependabot label, PyPI trusted publishing).
+
 ## Getting started
 
 1. Fork the repository and clone your fork.

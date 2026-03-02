@@ -30,6 +30,7 @@ Raiju aims to give you one clear entry point for PySpark while staying invisible
 1. [Usage](#usage)
 1. [How It Works](#how-it-works)
 1. [Development](#development)
+1. [Changelog](#changelog)
 1. [Support](#support)
 1. [Show Your Support](#show-your-support)
 1. [Code of Conduct](#code-of-conduct)
@@ -122,6 +123,10 @@ ruff check raiju/ tests/
 ruff format raiju/ tests/
 pytest tests/ -v
 ```
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for release history.
 
 ## Support
 
