@@ -257,7 +257,9 @@ Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for how to get
 
 If you are using Raiju, consider adding the Raiju badge to your project’s `README.md`:
 
+```md
 [![Raiju](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/seanpavlak/raiju/main/assets/badge.json)](https://github.com/seanpavlak/raiju)
+```
 
 ## License
 
