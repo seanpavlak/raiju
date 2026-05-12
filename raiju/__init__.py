@@ -1,8 +1,8 @@
 """
-Raiju — a PySpark wrapper that implicitly exposes all PySpark functionality.
+Raiju — distributed PySpark execution utilities with a Spark-native entry point.
 
-Use Raiju as a drop-in entry point for SparkSession. All SparkSession methods
-and attributes are forwarded automatically; nothing is hardcoded.
+The public `Raiju` type wraps `SparkSession` and forwards all attributes and
+methods so PySpark APIs stay available without a duplicated surface area.
 """
 
 from raiju.session import Raiju

@@ -12,39 +12,113 @@
 
 [**Docs**](https://raiju.sh)
 
-**PySpark, unleashed.** A thin wrapper around PySpark that exposes the full `SparkSession` API through a single, delegation-based interface, so you get all of Spark’s power with a minimal, extension-ready layer.
+Raiju is a **distributed PySpark execution framework** aimed at teams who need **maintainable orchestration** for data engineering workflows that stretch beyond simple columnar transforms—while staying **Spark-native** on the cluster.
 
-- **Full PySpark surface:** Every `SparkSession` API is available through Raiju via delegation. Nothing is reimplemented or locked in; new and future PySpark APIs work automatically.
-- **Drop-in entry point:** Use `Raiju` instead of `SparkSession`. Same builder, same methods, same DataFrames.
-- **Works everywhere:** Create a new session with the builder or wrap an existing one (e.g. `spark` in Databricks).
-- **Extension-ready:** A minimal foundation you can build on without forking PySpark.
-- **Single dependency:** PySpark 4.0+; no extra runtime deps.
+In one line: *Raiju is built on PySpark to simplify complex transformation orchestration, scalable UDF-style workflows, and (as the project grows) integrated local and remote inference for operational enrichment—without replacing Spark.*
 
-**Raiju** (雷獣, *raijū*) is a creature from Japanese folklore: a lightning beast and companion of the thunder god Raijin. The name means “thunder animal”: 雷 (*rai*, thunder) + 獣 (*jū*, beast). This project borrows it because it wraps **PySpark**, your engine for lightning-fast, distributed data, in a thin, flexible layer. All of Spark’s power is still there; Raiju is the interface that carries it.
+**Raiju** (雷獣, *raijū*) is a creature from Japanese folklore: a lightning beast and companion of the thunder god Raijin. The name fits a layer that rides **PySpark**, your engine for distributed data processing.
 
-Raiju aims to give you one clear entry point for PySpark while staying invisible: same APIs, same types, zero lock-in. You can adopt it gradually (e.g. wrap an existing `SparkSession` in Databricks) or use it as the base for your own extensions.
+## Table of contents
 
-## Table of Contents
-
-1. [Getting Started](#getting-started)
+1. [Why Raiju exists](#why-raiju-exists)
+1. [Core design goals](#core-design-goals)
+1. [Architecture overview](#architecture-overview)
+1. [Integrated inference workflows (direction)](#integrated-inference-workflows-direction)
+1. [Example workloads](#example-workloads)
+1. [What you get today](#what-you-get-today)
+1. [Roadmap](#roadmap)
+1. [Getting started](#getting-started)
 1. [Usage](#usage)
-1. [How It Works](#how-it-works)
+1. [How it works](#how-it-works)
 1. [Development](#development)
 1. [Changelog](#changelog)
 1. [Support](#support)
-1. [Show Your Support](#show-your-support)
-1. [Code of Conduct](#code-of-conduct)
+1. [Show your support](#show-your-support)
+1. [Code of conduct](#code-of-conduct)
 1. [Contributing](#contributing)
 1. [License](#license)
 1. [Security](#security)
 
-## Getting Started
+## Why Raiju exists
+
+Many **distributed data workflows** are hard to keep healthy when:
+
+- transformations need **cross-record** or **multi-field** reasoning
+- logic becomes **deeply procedural** across many steps
+- **orchestration** spans several enrichment or validation stages
+- you need **dynamic** execution choices without scattering `if` trees through jobs
+- **column-only** pipelines are hard to read or refactor
+- **UDF-heavy** pipelines become brittle operationally
+
+PySpark already gives you distributed compute. What teams often lack is a **clear, composable layer** for orchestration and advanced workflows—without giving up executors, partitions, and the rest of the Spark programming model. Raiju is meant to grow into that layer: **higher-level workflow composition** on top of **unchanged Spark execution**.
+
+## Core design goals
+
+- **Distributed-first:** Spark executors and cluster semantics stay central; Raiju coordinates and composes, it does not pretend compute is “local-first.”
+- **Workflow composition:** Modular pipelines and reusable building blocks instead of one-off scripts.
+- **Operational flexibility:** Room for local inference, remote providers, and hybrid patterns where privacy, cost, or latency demand it.
+- **Developer ergonomics:** Less bespoke glue for complex jobs; clearer boundaries between stages.
+- **Spark compatibility:** Same `DataFrame` types, same session APIs, same deployment story (including Databricks and on-prem clusters).
+
+## Architecture overview
+
+**Target shape:** Raiju sits as an **orchestration and execution abstraction** above Spark-native processing—handling transformation composition, coordination patterns, enrichment flows, and (optionally) inference calls—while **work still runs on Spark executors**.
+
+**Today:** the published library is a **thin, delegation-based `SparkSession` entry point** (see [What you get today](#what-you-get-today)). That is intentional: a **stable compatibility surface** before higher-level APIs land. The layering story above is where the project is headed; see [ROADMAP.md](ROADMAP.md) for concrete backlog items (diagrams, retries, partitioning docs, inference interfaces, benchmarks).
+
+## Integrated inference workflows (direction)
+
+Optional support for **LLM-assisted steps inside data pipelines** is part of the vision—framed as **operational enrichment**, not a separate “agent platform.”
+
+Planned execution styles to document and implement over time:
+
+- **Local inference** (for example via [Ollama](https://ollama.com/)) for low-latency or air-gapped settings
+- **Remote providers** (for example OpenRouter-compatible HTTP APIs) when external models are acceptable
+- **Hybrid** routing by policy (cost, privacy, SLA)
+
+Example workload types (all squarely “data engineering”):
+
+- semantic enrichment and tagging
+- entity normalization and fuzzy classification
+- metadata generation and schema hints
+- human-in-the-loop **review assistance** as a batch step
+- contextual transforms where a model proposes a value validated by rules
+
+Language in the project intentionally stays **grounded**: orchestration, enrichment, inference **hooks**—not hype around autonomy or “cognitive” stacks.
+
+## Example workloads
+
+Raiju is aimed at teams building **operational data systems** where jobs look like:
+
+- large-scale semantic enrichment
+- complex **mapPartitions** / UDF orchestration
+- fuzzy entity resolution and deduplication
+- metadata standardization across sources
+- multi-stage enrichment with checkpoints
+- operational anomaly or triage classification
+- hybrid **rules + model** scoring in batch
+
+## What you get today
+
+**Release v0.1.x** ships a **single, extension-ready entry point** over PySpark:
+
+- **Full PySpark surface:** `Raiju` forwards the entire `SparkSession` API via delegation—no duplicated method lists; new PySpark APIs keep working as PySpark evolves.
+- **Drop-in usage:** `Raiju.builder...getOrCreate()` or `Raiju(spark)` when you already have a session (for example in Databricks).
+- **Minimal dependency:** PySpark 4.0+ only; no extra runtime packages yet.
+
+Higher-level orchestration, inference integrations, and operational guides are **on the roadmap** ([ROADMAP.md](ROADMAP.md)), not implied as shipped features.
+
+## Roadmap
+
+See **[ROADMAP.md](ROADMAP.md)** for a structured backlog: execution and DAG diagrams, failure handling and retry semantics, partitioning and serialization notes, benchmarks, orchestration APIs, optional inference backends, and hardening for production pipelines.
+
+## Getting started
 
 ### Installation
 
-Raiju is available as [`raiju`](https://pypi.org/project/raiju/) on PyPI (or install from source).
+Raiju is published as [`raiju`](https://pypi.org/project/raiju/) on PyPI.
 
-Invoke or install with **uv** (recommended), **pip**, or **pipx**:
+With **uv** (recommended), **pip**, or **pipx**:
 
 ```shell
 # With uv.
@@ -82,7 +156,7 @@ from raiju import Raiju
 raiju = Raiju.builder.appName("my_app").master("local[*]").getOrCreate()
 ```
 
-Or wrap an existing session (e.g. in Databricks):
+Or wrap an existing session (for example in Databricks):
 
 ```python
 from raiju import Raiju
@@ -107,13 +181,13 @@ raiju.catalog.listTables()
 raiju.conf.set("key", "value")
 ```
 
-Any attribute or method on `SparkSession` is available on your `Raiju` instance; returned objects (DataFrames, etc.) are standard PySpark types.
+Returned objects are standard PySpark types.
 
-## How It Works
+## How it works
 
-- **No hardcoded API:** `Raiju` and its builder use `__getattr__` to forward to the real `SparkSession` (and `SparkSession.builder`). New PySpark methods and options work without changes to Raiju.
-- **Single entry point:** You get a `Raiju` instance; `.read`, `.sql`, `.range`, and everything else behave as in PySpark.
-- **Thin wrapper:** This layer is the base; you can add behavior on top without reimplementing Spark.
+- **No hardcoded API surface:** `Raiju` and its builder use `__getattr__` to forward to the real `SparkSession` (and `SparkSession.builder`).
+- **Single entry point:** You hold a `Raiju` instance; `.read`, `.sql`, `.range`, and the rest behave as in PySpark.
+- **Thin foundation:** This layer is the base for future orchestration and enrichment utilities without forking PySpark.
 
 ## Development
 
@@ -132,7 +206,7 @@ See [CHANGELOG.md](CHANGELOG.md) for release history.
 
 Having trouble? Open an [issue](https://github.com/seanpavlak/raiju/issues) on GitHub.
 
-## Code of Conduct
+## Code of conduct
 
 This project adheres to the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code.
 
@@ -140,9 +214,9 @@ This project adheres to the [Contributor Covenant Code of Conduct](CODE_OF_CONDU
 
 Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for how to get started.
 
-## Show Your Support
+## Show your support
 
-If you're using Raiju, consider adding the Raiju badge to your project's `README.md`:
+If you are using Raiju, consider adding the Raiju badge to your project’s `README.md`:
 
 ```md
 [![Raiju](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/seanpavlak/raiju/main/assets/badge.json)](https://github.com/seanpavlak/raiju)

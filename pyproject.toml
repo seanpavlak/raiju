@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "raiju"
 version = "0.1.1"
-description = "A PySpark wrapper that implicitly exposes all PySpark functionality"
+description = "Distributed PySpark execution layer for composable data engineering workflows (Spark-native, extension-ready)"
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
