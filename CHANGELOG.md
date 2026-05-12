@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Optional **inference configuration** on `Raiju`: `OllamaConfig`, `OpenRouterConfig`, and `InferenceSettings`, plus `with_inference()` for builder workflows. Configuration only (no HTTP); for future enrichment execution hooks.
+
+### Changed
+
+- `OpenRouterConfig` emits a `UserWarning` when `api_key` is omitted, documenting that `resolved_api_key()` reads from the configured environment variable (default `OPENROUTER_API_KEY`).
 ## [0.1.1] - 2026-03-01
 
 ### Added

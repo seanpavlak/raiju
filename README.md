@@ -29,6 +29,7 @@ In one line: *Raiju is built on PySpark to simplify complex transformation orche
 1. [Roadmap](#roadmap)
 1. [Getting started](#getting-started)
 1. [Usage](#usage)
+1. [Inference settings (Ollama / OpenRouter)](#inference-settings-ollama--openrouter)
 1. [How it works](#how-it-works)
 1. [Development](#development)
 1. [Changelog](#changelog)
@@ -86,6 +87,8 @@ Example workload types (all squarely “data engineering”):
 
 Language in the project intentionally stays **grounded**: orchestration, enrichment, inference **hooks**—not hype around autonomy or “cognitive” stacks.
 
+You can **initialize `Raiju` with provider settings** (endpoints, default models, OpenRouter key resolution) so later orchestration can call into Ollama or OpenRouter without ad-hoc globals. This step performs **no HTTP requests**; it only holds configuration on the session object.
+
 ## Example workloads
 
 Raiju is aimed at teams building **operational data systems** where jobs look like:
@@ -104,9 +107,10 @@ Raiju is aimed at teams building **operational data systems** where jobs look li
 
 - **Full PySpark surface:** `Raiju` forwards the entire `SparkSession` API via delegation—no duplicated method lists; new PySpark APIs keep working as PySpark evolves.
 - **Drop-in usage:** `Raiju.builder...getOrCreate()` or `Raiju(spark)` when you already have a session (for example in Databricks).
+- **Inference settings on the session:** optional `InferenceSettings` (Ollama and/or OpenRouter) attached at construction or via `with_inference()` for builder flows—configuration only, no calls yet.
 - **Minimal dependency:** PySpark 4.0+ only; no extra runtime packages yet.
 
-Higher-level orchestration, inference integrations, and operational guides are **on the roadmap** ([ROADMAP.md](ROADMAP.md)), not implied as shipped features.
+Higher-level orchestration, HTTP clients for inference, and operational guides are **on the roadmap** ([ROADMAP.md](ROADMAP.md)), not implied as shipped features beyond configuration attachment.
 
 ## Roadmap
 
@@ -182,6 +186,41 @@ raiju.conf.set("key", "value")
 ```
 
 Returned objects are standard PySpark types.
+
+### Inference settings (Ollama / OpenRouter)
+
+Attach **one or both** backends so future Raiju execution can read models and endpoints from `raiju.inference` (no network I/O at init):
+
+```python
+from pyspark.sql import SparkSession
+from raiju import InferenceSettings, OllamaConfig, OpenRouterConfig, Raiju
+
+spark = SparkSession.builder.appName("enrich").master("local[*]").getOrCreate()
+raiju = Raiju(
+    spark,
+    inference=InferenceSettings(
+        ollama=OllamaConfig(default_model="llama3.2"),
+        openrouter=OpenRouterConfig(
+            default_model="anthropic/claude-3.5-sonnet",
+            # api_key=None → reads OPENROUTER_API_KEY from the environment (emits a UserWarning once at config construction)
+        ),
+    ),
+)
+
+assert raiju.inference is not None
+assert raiju.inference.ollama.default_model == "llama3.2"
+assert raiju.inference.openrouter.resolved_api_key() is not None  # if env is set
+```
+
+If you use **`Raiju.builder...getOrCreate()`**, the builder still returns a bare `Raiju`; chain **`with_inference(...)`** on the result (same underlying `SparkSession`):
+
+```python
+from raiju import InferenceSettings, OllamaConfig, Raiju
+
+raiju = Raiju.builder.appName("enrich").master("local[*]").getOrCreate().with_inference(
+    InferenceSettings(ollama=OllamaConfig(default_model="llama3.2"))
+)
+```
 
 ## How it works
 

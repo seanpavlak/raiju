@@ -5,7 +5,11 @@ All PySpark functionality is exposed implicitly via __getattr__ delegation.
 No explicit method listing — any SparkSession API (current or future) works.
 """
 
+from __future__ import annotations
+
 from pyspark.sql import SparkSession
+
+from raiju.inference.settings import InferenceSettings
 
 
 class _RaijuBuilder:
@@ -28,20 +32,44 @@ class Raiju:
     Wrapper around PySpark's SparkSession that forwards all attribute and
     method access to the underlying session. All PySpark functionality
     is available through this instance without hardcoding.
+
+    Optional ``inference`` settings attach Ollama / OpenRouter configuration
+    for future enrichment execution; they do not start inference by themselves.
     """
 
     builder = _RaijuBuilder()
 
-    def __init__(self, spark: SparkSession):
+    def __init__(
+        self,
+        spark: SparkSession,
+        inference: InferenceSettings | None = None,
+    ):
         if not isinstance(spark, SparkSession):
             raise TypeError("Raiju requires a pyspark.sql.SparkSession")
         object.__setattr__(self, "_spark", spark)
+        object.__setattr__(self, "_inference", inference)
+
+    @property
+    def inference(self) -> InferenceSettings | None:
+        """Ollama/OpenRouter configuration for future execution hooks, or ``None``."""
+        return self._inference
+
+    def with_inference(self, inference: InferenceSettings) -> Raiju:
+        """
+        Return a new ``Raiju`` wrapping the same Spark session with inference settings.
+
+        Use after ``Raiju.builder...getOrCreate()`` when the builder path cannot
+        attach settings directly.
+        """
+        if not isinstance(inference, InferenceSettings):
+            raise TypeError("inference must be an InferenceSettings instance")
+        return Raiju(self._spark, inference=inference)
 
     def __getattr__(self, name: str):
         return getattr(self._spark, name)
 
     def __setattr__(self, name: str, value) -> None:
-        if name == "_spark":
+        if name in ("_spark", "_inference"):
             object.__setattr__(self, name, value)
         else:
             setattr(self._spark, name, value)
