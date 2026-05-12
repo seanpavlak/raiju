@@ -45,6 +45,7 @@ Raiju should read as **orchestration and execution infrastructure for complex di
 
 | ID | Item | Notes |
 |----|------|--------|
+| I0 | **Session-scoped inference settings** | **Done (initial):** `InferenceSettings` / `OllamaConfig` / `OpenRouterConfig` on `Raiju(..., inference=...)` and `with_inference()`; no I/O. |
 | I1 | **Pluggable inference backend** | Interface + reference implementations (e.g. HTTP to Ollama, OpenRouter-compatible client). |
 | I2 | **Hybrid execution policy** | Per-row, per-partition, or sampled routing between local and remote. |
 | I3 | **Backpressure and quotas** | Concurrency caps, timeouts, circuit breaking for remote APIs. |
@@ -72,7 +73,7 @@ Per project positioning: avoid hype terms that read as “AI product” rather t
 
 ---
 
-## Current baseline (v0.1.x)
+## Current baseline (v0.1.2)
 
 The shipped library is a **SparkSession-compatible entry point** with full API delegation. Roadmap items above describe the direction for higher-level orchestration and optional inference while **preserving Spark-native execution**.
 
