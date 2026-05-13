@@ -30,6 +30,7 @@ In one line: *Raiju is built on PySpark to simplify complex transformation orche
 1. [Getting started](#getting-started)
 1. [Usage](#usage)
 1. [Inference settings (Ollama / OpenRouter)](#inference-settings-ollama--openrouter)
+1. [Weave (broadcast-friendly joins)](#weave-broadcast-friendly-joins)
 1. [How it works](#how-it-works)
 1. [Development](#development)
 1. [Changelog](#changelog)
@@ -108,6 +109,7 @@ Raiju is aimed at teams building **operational data systems** where jobs look li
 - **Full PySpark surface:** `Raiju` forwards the entire `SparkSession` API via delegation—no duplicated method lists; new PySpark APIs keep working as PySpark evolves.
 - **Drop-in usage:** `Raiju.builder...getOrCreate()` or `Raiju(spark)` when you already have a session (for example in Databricks).
 - **Inference settings on the session:** optional `InferenceSettings` (Ollama and/or OpenRouter) attached at construction or via `with_inference()` for builder flows—configuration only, no calls yet.
+- **`weave` joins:** optional `broadcast()` hints when one side is much smaller than the other, using bounded row-count inference (see [Weave (broadcast-friendly joins)](#weave-broadcast-friendly-joins)).
 - **Minimal dependency:** PySpark 4.0+ only; no extra runtime packages yet.
 
 Higher-level orchestration, HTTP clients for inference, and operational guides are **on the roadmap** ([ROADMAP.md](ROADMAP.md)), not implied as shipped features beyond configuration attachment.
@@ -221,6 +223,72 @@ raiju = Raiju.builder.appName("enrich").master("local[*]").getOrCreate().with_in
     InferenceSettings(ollama=OllamaConfig(default_model="llama3.2"))
 )
 ```
+
+## Weave (broadcast-friendly joins)
+
+`weave` joins two PySpark `DataFrame`s and can attach Spark’s **`broadcast()`** hint when one relation is clearly much smaller than the other. The decision uses **bounded counts**—at most `bounded_count_cap + 1` rows are counted per side—so you avoid a full `count()` on huge tables while still getting an explicit hint when the skew is obvious.
+
+Spark’s planner already **auto-broadcasts** when estimated size is under [`spark.sql.autoBroadcastJoinThreshold`](https://spark.apache.org/docs/latest/sql-performance-tuning.html#other-configuration-options). Use `weave` when statistics are missing or conservative and you still want a deliberate broadcast join path.
+
+### `Raiju.weave`
+
+On a `Raiju` session, `weave` delegates to the same join logic as the module function (bounded counts and `broadcast()` hints only—no inference or LLM calls):
+
+```python
+from pyspark.sql import SparkSession
+from raiju import Raiju
+
+spark = SparkSession.builder.appName("demo").master("local[*]").getOrCreate()
+raiju = Raiju(spark)
+
+result = raiju.weave(large_df, small_df, on="id", how="left_outer")
+```
+
+With the builder:
+
+```python
+from raiju import Raiju
+
+raiju = Raiju.builder.appName("demo").master("local[*]").getOrCreate()
+out = raiju.weave(facts, dim, on="sk", how="inner")
+```
+
+### `weave` from the module
+
+The same behavior is available without a `Raiju` wrapper—useful in shared libraries or plain `SparkSession` code:
+
+```python
+from raiju import BroadcastJoinPolicy, weave
+
+out = weave(
+    large_df,
+    small_df,
+    on="id",
+    how="inner",
+    policy=BroadcastJoinPolicy(
+        bounded_count_cap=50_000,
+        max_small_to_large_ratio=0.15,
+    ),
+)
+```
+
+### `broadcast_side`
+
+| Value | Behavior |
+|-------|----------|
+| `"auto"` (default) | Infer which side to broadcast from bounded counts and `BroadcastJoinPolicy`. |
+| `"left"` / `"right"` | Force `broadcast()` on that operand. |
+| `"none"` | Ordinary `join` with no broadcast hint. |
+
+### `BroadcastJoinPolicy` fields
+
+| Field | Default | Role |
+|-------|---------|------|
+| `bounded_count_cap` | `100_000` | Each side uses `limit(cap + 1).count()` so at most `cap + 1` rows are read for the decision. |
+| `max_small_to_large_ratio` | `0.2` | Broadcast only if the smaller bounded count is at most this fraction of the larger. |
+| `ambiguous_when_both_at_cap` | `True` | If both sides hit `cap + 1`, skip broadcasting (sizes are unclear). |
+
+Tune these together with executor memory and `spark.sql.autoBroadcastJoinThreshold` so broadcast joins stay within cluster limits.
 
 ## How it works
 

@@ -10,6 +10,8 @@ from __future__ import annotations
 from pyspark.sql import SparkSession
 
 from raiju.inference.settings import InferenceSettings
+from raiju.joins import BroadcastJoinPolicy, BroadcastSideSpec
+from raiju.joins import weave as weave_fn
 
 
 class _RaijuBuilder:
@@ -53,6 +55,31 @@ class Raiju:
     def inference(self) -> InferenceSettings | None:
         """Ollama/OpenRouter configuration for future execution hooks, or ``None``."""
         return self._inference
+
+    def weave(
+        self,
+        left,
+        right,
+        on=None,
+        how=None,
+        *,
+        policy: BroadcastJoinPolicy | None = None,
+        broadcast_side: BroadcastSideSpec = "auto",
+    ):
+        """
+        Weave two DataFrames with optional broadcast of the smaller side.
+
+        Uses bounded row-count inference when ``broadcast_side`` is ``"auto"``;
+        see :func:`raiju.joins.weave`.
+        """
+        return weave_fn(
+            left,
+            right,
+            on=on,
+            how=how,
+            policy=policy,
+            broadcast_side=broadcast_side,
+        )
 
     def with_inference(self, inference: InferenceSettings) -> Raiju:
         """
