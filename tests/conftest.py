@@ -2,7 +2,7 @@
 
 import sys
 import types
-from typing import Any
+from typing import Any, Optional
 from unittest.mock import MagicMock
 
 # Install mock PySpark before raiju (or any test) imports the real one.
@@ -60,7 +60,7 @@ if "pyspark" not in sys.modules:
             self.nullable = nullable
 
     class _StructType:
-        def __init__(self, fields: list | None = None):
+        def __init__(self, fields: Optional[list] = None):
             self.fields = fields or []
 
         def simpleString(self) -> str:  # noqa: N802 — Spark API name
