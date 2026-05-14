@@ -1,5 +1,4 @@
-"""
-Raiju session: a thin proxy over PySpark's SparkSession.
+"""Raiju session: a thin proxy over PySpark's SparkSession.
 
 All PySpark functionality is exposed implicitly via __getattr__ delegation.
 No explicit method listing — any SparkSession API (current or future) works.
@@ -12,6 +11,7 @@ from pyspark.sql import SparkSession
 from raiju.inference.settings import InferenceSettings
 from raiju.joins import BroadcastJoinPolicy, BroadcastSideSpec
 from raiju.joins import weave as weave_fn
+from raiju.profile import profile_dataframe
 
 
 class _RaijuBuilder:
@@ -30,8 +30,7 @@ class _RaijuBuilder:
 
 
 class Raiju:
-    """
-    Wrapper around PySpark's SparkSession that forwards all attribute and
+    """Wrapper around PySpark's SparkSession that forwards all attribute and
     method access to the underlying session. All PySpark functionality
     is available through this instance without hardcoding.
 
@@ -66,8 +65,7 @@ class Raiju:
         policy: BroadcastJoinPolicy | None = None,
         broadcast_side: BroadcastSideSpec = "auto",
     ):
-        """
-        Weave two DataFrames with optional broadcast of the smaller side.
+        """Weave two DataFrames with optional broadcast of the smaller side.
 
         Uses bounded row-count inference when ``broadcast_side`` is ``"auto"``;
         see :func:`raiju.joins.weave`.
@@ -81,9 +79,22 @@ class Raiju:
             broadcast_side=broadcast_side,
         )
 
-    def with_inference(self, inference: InferenceSettings) -> Raiju:
+    def profile(self, df, *, inference=None, **kwargs):
+        """Profile a DataFrame using Spark-native aggregations.
+
+        See :func:`raiju.profile.profile_dataframe` for arguments and return shape.
+        Pass ``inference_enrichment=True`` (via ``ProfileOptions`` or kwargs) with
+        :class:`~raiju.inference.InferenceSettings` to run bounded LLM column
+        hints after aggregates.
+
+        When ``inference`` is omitted, :attr:`Raiju.inference` is passed through
+        if present.
         """
-        Return a new ``Raiju`` wrapping the same Spark session with inference settings.
+        inf = self._inference if inference is None else inference
+        return profile_dataframe(df, inference=inf, **kwargs)
+
+    def with_inference(self, inference: InferenceSettings) -> Raiju:
+        """Return a new ``Raiju`` with the same Spark session and inference settings.
 
         Use after ``Raiju.builder...getOrCreate()`` when the builder path cannot
         attach settings directly.

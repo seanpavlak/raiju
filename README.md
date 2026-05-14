@@ -28,9 +28,9 @@ In one line: *Raiju is built on PySpark to simplify complex transformation orche
 1. [What you get today](#what-you-get-today)
 1. [Roadmap](#roadmap)
 1. [Getting started](#getting-started)
-1. [Usage](#usage)
 1. [Inference settings (Ollama / OpenRouter)](#inference-settings-ollama--openrouter)
 1. [Weave (broadcast-friendly joins)](#weave-broadcast-friendly-joins)
+1. [DataFrame profiling](#dataframe-profiling)
 1. [How it works](#how-it-works)
 1. [Development](#development)
 1. [Changelog](#changelog)
@@ -88,7 +88,7 @@ Example workload types (all squarely “data engineering”):
 
 Language in the project intentionally stays **grounded**: orchestration, enrichment, inference **hooks**—not hype around autonomy or “cognitive” stacks.
 
-You can **initialize `Raiju` with provider settings** (endpoints, default models, OpenRouter key resolution) so later orchestration can call into Ollama or OpenRouter without ad-hoc globals. This step performs **no HTTP requests**; it only holds configuration on the session object.
+You can **initialize `Raiju` with provider settings** (endpoints, default models, OpenRouter key resolution) so later orchestration can call into Ollama or OpenRouter without ad-hoc globals. Constructing `InferenceSettings` performs **no HTTP requests**—it only holds configuration. **Optional [DataFrame profiling](#dataframe-profiling)** can perform bounded driver-side HTTP to Ollama or OpenRouter when you enable LLM enrichment on a profile run.
 
 ## Example workloads
 
@@ -101,18 +101,20 @@ Raiju is aimed at teams building **operational data systems** where jobs look li
 - multi-stage enrichment with checkpoints
 - operational anomaly or triage classification
 - hybrid **rules + model** scoring in batch
+- **dataset QA:** column-level profiles with optional LLM regex and format hints before publishing
 
 ## What you get today
 
-**Release v0.1.2** ships a **single, extension-ready entry point** over PySpark:
+**Release v0.1.2** ships a **single, extension-ready entry point** over PySpark plus profiling utilities:
 
 - **Full PySpark surface:** `Raiju` forwards the entire `SparkSession` API via delegation—no duplicated method lists; new PySpark APIs keep working as PySpark evolves.
 - **Drop-in usage:** `Raiju.builder...getOrCreate()` or `Raiju(spark)` when you already have a session (for example in Databricks).
-- **Inference settings on the session:** optional `InferenceSettings` (Ollama and/or OpenRouter) attached at construction or via `with_inference()` for builder flows—configuration only, no calls yet.
+- **Inference settings on the session:** optional `InferenceSettings` (Ollama and/or OpenRouter) attached at construction or via `with_inference()` for builder flows (configuration only at init).
 - **`weave` joins:** optional `broadcast()` hints when one side is much smaller than the other, using bounded row-count inference (see [Weave (broadcast-friendly joins)](#weave-broadcast-friendly-joins)).
-- **Minimal dependency:** PySpark 4.0+ only; no extra runtime packages yet.
+- **DataFrame profiling:** `profile_dataframe` / `Raiju.profile` compute rich per-column stats in Spark-native aggregates (optional `freqItems`, optional bounded **LLM** enrichment with **Pydantic**-validated JSON and **tiktoken** token estimates). See [DataFrame profiling](#dataframe-profiling).
+- **Runtime dependencies:** `pyspark>=4.0`, `pydantic>=2.5`, `tiktoken>=0.7` (installed with the package; used for profiling validation and token accounting, not for core `Raiju` delegation).
 
-Higher-level orchestration, HTTP clients for inference, and operational guides are **on the roadmap** ([ROADMAP.md](ROADMAP.md)), not implied as shipped features beyond configuration attachment.
+Higher-level orchestration beyond profiling, generic HTTP inference clients, and operational guides are **on the roadmap** ([ROADMAP.md](ROADMAP.md)).
 
 ## Roadmap
 
@@ -150,7 +152,7 @@ For development (linting, formatting, tests):
 pip install -e ".[dev]"
 ```
 
-**Requirements:** Python 3.9+, PySpark 4.0+.
+**Requirements:** Python 3.9+, PySpark 4.0+, plus **pydantic** and **tiktoken** (pulled in automatically with `pip install raiju`).
 
 ### Usage
 
@@ -189,9 +191,18 @@ raiju.conf.set("key", "value")
 
 Returned objects are standard PySpark types.
 
+Quick **profile** (Spark-side stats only; see [DataFrame profiling](#dataframe-profiling) for LLM options):
+
+```python
+from raiju import ProfileOptions, profile_dataframe
+
+sample = raiju.range(1_000).toDF("id")
+print(profile_dataframe(sample, options=ProfileOptions())["row_count"])
+```
+
 ### Inference settings (Ollama / OpenRouter)
 
-Attach **one or both** backends so future Raiju execution can read models and endpoints from `raiju.inference` (no network I/O at init):
+Attach **one or both** backends so profiling LLM enrichment and future Raiju execution can read models and endpoints from `raiju.inference` (no network I/O at init):
 
 ```python
 from pyspark.sql import SparkSession
@@ -290,10 +301,144 @@ out = weave(
 
 Tune these together with executor memory and `spark.sql.autoBroadcastJoinThreshold` so broadcast joins stay within cluster limits.
 
+## DataFrame profiling
+
+`profile_dataframe` (and `Raiju.profile`) summarize a PySpark `DataFrame` with **Spark-native aggregates**—one wide `agg` over the input for most metrics, plus optional **`freqItems`** and optional **driver-side LLM enrichment** when you attach `InferenceSettings` and opt in. This path is built for throughput: it does **not** scan the table in a Python row UDF to compute column stats.
+
+### What you get
+
+- **Row and column metrics:** null counts, completeness, approximate distinct counts, type-aware stats (numeric percentiles / skew / kurtosis, string length and lexicographic bounds, booleans, timestamps, arrays, maps, and more).
+- **`describe`-style blocks** under each column where applicable, plus structured JSON-friendly output (`collect=True` by default scrubs NaN/inf for logging).
+- **Optional `freqItems`:** approximate frequent values / mode-style candidates (`ProfileOptions.include_freq_items`).
+- **Optional LLM layer:** when `inference` is `InferenceSettings` and `inference_enrichment=True`, Raiju sends **aggregates plus a capped row sample** (single bounded `collect`) to Ollama or OpenRouter. The model returns JSON validated by **Pydantic** (`ProfileEnrichmentResponse`). Suggested regexes are checked with Python `re.compile`; failures become `UserWarning`s and null `llm` payloads.
+- **Token accounting:** prompt and completion sizes are estimated with **tiktoken** (`build_llm_token_usage`); provider-reported usage is copied under `raw_usage["api"]` for audit only. After a successful HTTP call, Raiju emits **`RaijuLLMUsageWarning`** with the tiktoken totals (filter with `warnings.filterwarnings` if needed).
+
+### `profile_dataframe` (function API)
+
+```python
+from raiju import ProfileOptions, profile_dataframe
+
+profile = profile_dataframe(
+    df,
+    options=ProfileOptions(
+        percentiles=[0.25, 0.5, 0.75],
+        include_freq_items=True,
+        freq_items_support=0.05,
+        columns=["user_id", "event_ts", "payload"],  # optional subset
+    ),
+)
+print(profile["row_count"])
+print(profile["columns"]["user_id"]["approx_distinct"])
+print(profile["approximate_spark_actions"])  # 1 + 1 if freqItems ran
+```
+
+### `Raiju.profile` (session shortcut)
+
+Same as `profile_dataframe`, and forwards **`Raiju.inference`** when you omit `inference=`:
+
+```python
+from raiju import InferenceSettings, OllamaConfig, ProfileOptions, Raiju
+
+raiju = Raiju(spark, inference=InferenceSettings(ollama=OllamaConfig(default_model="llama3.2")))
+prof = raiju.profile(df, options=ProfileOptions(inference_enrichment=True))
+```
+
+### LLM enrichment options (`ProfileOptions`)
+
+| Field | Default | Role |
+|-------|---------|------|
+| `inference_enrichment` | `False` | When `True` and `inference` is `InferenceSettings`, run the bounded LLM pass. |
+| `inference_provider` | `"auto"` | `"auto"` prefers Ollama if configured, else OpenRouter; or force `"ollama"` / `"openrouter"`. |
+| `inference_http_timeout_s` | `120` | HTTP timeout for the chat request. |
+| `inference_max_columns` | `28` | Max columns sent to the model (prioritizes strings, temporal, boolean, then low-cardinality numerics). |
+| `inference_sample_scan_limit` | `120` | Max rows read for the batched sample `select`. |
+| `inference_max_sample_values` | `14` | Max distinct sample strings/values per column in the payload. |
+| `inference_max_value_chars` | `280` | Truncate sample cell text for the prompt. |
+
+### Pydantic types (LLM JSON contract)
+
+Import from `raiju` or `raiju.inference`:
+
+- **`ProfileEnrichmentResponse`** — root object with `columns: list[ProfileEnrichmentColumn]`.
+- **`ProfileEnrichmentColumn`** — one column’s LLM fields (`human_summary`, `suggested_validation_regex`, `java_simple_date_format`, `python_strptime_directive`, `pii_likelihood`, …).
+- **`LLMTokenUsage`** — normalized token fields plus `raw_usage` (`tiktoken` metadata + `api` blob).
+
+### `profile_to_describe_rows`
+
+Flatten `describe`-compatible entries into row records (for notebooks or small tables):
+
+```python
+from raiju import profile_dataframe, profile_to_describe_rows
+
+prof = profile_dataframe(df)
+rows = profile_to_describe_rows(prof)
+# each row: {"summary": "mean"|"count"|..., "column": str, "value": ...}
+```
+
+### OpenRouter example (explicit API key)
+
+```python
+import warnings
+
+from raiju import (
+    InferenceSettings,
+    OpenRouterConfig,
+    ProfileOptions,
+    RaijuLLMUsageWarning,
+    profile_dataframe,
+)
+
+warnings.simplefilter("always", RaijuLLMUsageWarning)
+
+inf = InferenceSettings(
+    openrouter=OpenRouterConfig(
+        api_key="sk-or-...",  # or None + OPENROUTER_API_KEY
+        default_model="openai/gpt-4o-mini",
+    ),
+)
+
+prof = profile_dataframe(
+    df,
+    inference=inf,
+    options=ProfileOptions(
+        inference_enrichment=True,
+        inference_provider="openrouter",
+        inference_max_columns=12,
+    ),
+)
+
+assert prof.get("llm_enrichment", {}).get("status") in ("ok", "failed")
+print(prof.get("llm_token_usage"))  # tiktoken-based totals when HTTP succeeded
+```
+
+### Advanced: count tokens outside profiling
+
+If you have raw strings (for example from another tool), you can reuse the same accounting Raiju uses after HTTP:
+
+```python
+from raiju import build_llm_token_usage
+
+usage = build_llm_token_usage(
+    provider="openrouter",
+    model="openai/gpt-4o-mini",
+    system="You are a helpful assistant.",
+    user='{"task": "summarize"}',
+    assistant='{"ok": true}',
+    raw_api_response={},  # optional provider JSON to stash under raw_usage["api"]
+)
+print(usage.total_tokens, usage.model_dump()["raw_usage"]["tiktoken"]["encoding"])
+```
+
+### Notes
+
+- **Cost and privacy:** LLM enrichment sends bounded aggregates and samples only, but still leaves your network boundary—treat models and prompts like production data.
+- **Spark actions:** Profiling always runs at least one aggregate action; `freqItems` and LLM sampling add additional actions documented in `approximate_spark_actions`.
+
 ## How it works
 
 - **No hardcoded API surface:** `Raiju` and its builder use `__getattr__` to forward to the real `SparkSession` (and `SparkSession.builder`).
 - **Single entry point:** You hold a `Raiju` instance; `.read`, `.sql`, `.range`, and the rest behave as in PySpark.
+- **Composable helpers:** `weave` and `profile` / `profile_dataframe` live on `Raiju` (or as module functions) without replacing `DataFrame` types.
 - **Thin foundation:** This layer is the base for future orchestration and enrichment utilities without forking PySpark.
 
 ## Development

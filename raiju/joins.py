@@ -1,5 +1,4 @@
-"""
-Broadcast join helpers with bounded row-count inference.
+"""Broadcast join helpers with bounded row-count inference.
 
 ``weave`` combines two DataFrames with optional ``broadcast()`` hints when
 one side is much smaller than the other.
@@ -21,8 +20,7 @@ BroadcastSideSpec = Literal["left", "right", "auto", "none"]
 
 @dataclass(frozen=True)
 class BroadcastJoinPolicy:
-    """
-    Controls when a side is considered small enough to broadcast.
+    """Controls when a side is considered small enough to broadcast.
 
     ``max_small_to_large_ratio`` enforces that the smaller bounded count is at
     most this fraction of the larger (e.g. ``0.2`` → small is ≤ 20% of large).
@@ -40,8 +38,7 @@ class BroadcastJoinPolicy:
 
 
 def bounded_row_count(df: Any, cap: int) -> int:
-    """
-    Return ``min(actual_row_count, cap + 1)`` by scanning at most ``cap + 1`` rows.
+    """Return ``min(actual_row_count, cap + 1)`` by scanning at most ``cap + 1`` rows.
 
     A return value of ``cap + 1`` means "at least ``cap + 1`` rows" without a
     full table count.
@@ -56,8 +53,7 @@ def infer_broadcast_side(
     right: Any,
     policy: BroadcastJoinPolicy | None = None,
 ) -> BroadcastSide | None:
-    """
-    Decide which side to broadcast using bounded counts and a size ratio.
+    """Decide which side to broadcast using bounded counts and a size ratio.
 
     Returns ``None`` when broadcasting is not recommended (similar sizes,
     both hit the cap without a clear winner, or ratio threshold not met).
@@ -170,8 +166,7 @@ def weave(
     policy: BroadcastJoinPolicy | None = None,
     broadcast_side: BroadcastSideSpec = "auto",
 ) -> Any:
-    """
-    Weave two ``DataFrame``s together, optionally broadcasting the smaller side.
+    """Weave two ``DataFrame``s together, optionally broadcasting the smaller side.
 
     When ``broadcast_side`` is ``"auto"`` (default), bounded row counts and
     ``BroadcastJoinPolicy`` pick a side; no broadcast is applied when inference

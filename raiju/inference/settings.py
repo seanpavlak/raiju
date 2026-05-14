@@ -20,8 +20,7 @@ def _normalize_http_base(url: str) -> str:
 
 @dataclass(frozen=True)
 class OllamaConfig:
-    """
-    Local Ollama HTTP API (default port 11434).
+    """Local Ollama HTTP API (default port 11434).
 
     Used for future partition-local or driver-coordinated inference calls.
     """
@@ -39,8 +38,7 @@ class OllamaConfig:
 
 @dataclass(frozen=True)
 class OpenRouterConfig:
-    """
-    OpenRouter-compatible HTTP API (OpenAI-style paths under base_url).
+    """OpenRouter-compatible HTTP API (OpenAI-style paths under base_url).
 
     API key may be supplied explicitly or read from ``api_key_env_var``.
     If ``api_key`` is ``None``, constructing this config emits a ``UserWarning``
@@ -76,8 +74,7 @@ class OpenRouterConfig:
 
 @dataclass(frozen=True)
 class InferenceSettings:
-    """
-    Bundle of optional inference backends for future Raiju execution hooks.
+    """Bundle of optional inference backends for future Raiju execution hooks.
 
     No network requests are made when constructing or attaching these settings.
     """
