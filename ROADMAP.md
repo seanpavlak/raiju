@@ -79,7 +79,7 @@ Per project positioning: avoid hype terms that read as “AI product” rather t
 
 ---
 
-## Current baseline (v0.1.2)
+## Current baseline (v0.1.3)
 
 The shipped library is a **SparkSession-compatible entry point** with full API delegation, plus **Weft**, **Weave**, **DataFrame profiling** (optional LLM enrichment), and **`raiju.inference.chat`** as the shared bounded HTTP path for Ollama/OpenRouter. Roadmap rows above are mostly **extensions** (orchestration layer, diagrams, hardening) on top of that baseline.
 

@@ -1,8 +1,8 @@
 # Raiju
 
 [![Documentation](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/seanpavlak/raiju/main/assets/badge.json)](https://raiju.sh)
-[![Release v0.1.2](https://img.shields.io/badge/release-v0.1.2-blue.svg)](https://github.com/seanpavlak/raiju/releases)
-[![PyPI version](https://img.shields.io/badge/pypi-v0.1.2-blue.svg)](https://pypi.org/project/raiju/)
+[![Release v0.1.3](https://img.shields.io/badge/release-v0.1.3-blue.svg)](https://github.com/seanpavlak/raiju/releases)
+[![PyPI version](https://img.shields.io/badge/pypi-v0.1.3-blue.svg)](https://pypi.org/project/raiju/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![CI](https://github.com/seanpavlak/raiju/actions/workflows/ci.yml/badge.svg)](https://github.com/seanpavlak/raiju/actions)
@@ -106,7 +106,7 @@ Raiju is aimed at teams building **operational data systems** where jobs look li
 
 ## What you get today
 
-**Release v0.1.2** ships a **single, extension-ready entry point** over PySpark plus profiling utilities:
+**Release v0.1.3** ships a **single, extension-ready entry point** over PySpark plus profiling utilities:
 
 - **Full PySpark surface:** `Raiju` forwards the entire `SparkSession` API via delegation—no duplicated method lists; new PySpark APIs keep working as PySpark evolves.
 - **Drop-in usage:** `Raiju.builder...getOrCreate()` or `Raiju(spark)` when you already have a session (for example in Databricks).
