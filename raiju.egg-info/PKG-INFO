@@ -1,60 +1,154 @@
 Metadata-Version: 2.4
 Name: raiju
-Version: 0.1.0
-Summary: A PySpark wrapper that implicitly exposes all PySpark functionality
+Version: 0.1.3
+Summary: Distributed PySpark execution layer for composable data engineering workflows (Spark-native, extension-ready)
 Requires-Python: >=3.9
 Description-Content-Type: text/markdown
 License-File: LICENSE
 Requires-Dist: pyspark>=4.0.0
+Requires-Dist: pydantic>=2.5.0
+Requires-Dist: python-dateutil>=2.8.0
+Requires-Dist: tiktoken>=0.7.0
+Requires-Dist: eval-type-backport>=0.2.0; python_version < "3.10"
 Provides-Extra: dev
 Requires-Dist: pre-commit>=3.0.0; extra == "dev"
 Requires-Dist: pytest>=8.0; extra == "dev"
+Requires-Dist: pytest-cov>=4.0.0; extra == "dev"
 Requires-Dist: ruff>=0.8.0; extra == "dev"
 Dynamic: license-file
 
 # Raiju
 
-[![Documentation](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/seanpavlak/raiju/refs/heads/main/assets/badge.json)](https://raiju.sh)
-[![PyPI version](https://img.shields.io/pypi/v/raiju.svg)](https://pypi.org/project/raiju/)
-[![PyPI license](https://img.shields.io/pypi/l/raiju.svg)](https://pypi.org/project/raiju/)
-[![PyPI Python versions](https://img.shields.io/pypi/pyversions/raiju.svg)](https://pypi.org/project/raiju/)
-[![CI](https://github.com/seanpavlak/raiju/workflows/CI/badge.svg)](https://github.com/seanpavlak/raiju/actions)
+[![Documentation](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/seanpavlak/raiju/main/assets/badge.json)](https://raiju.sh)
+[![Release v0.1.3](https://img.shields.io/badge/release-v0.1.3-blue.svg)](https://github.com/seanpavlak/raiju/releases)
+[![PyPI version](https://img.shields.io/badge/pypi-v0.1.3-blue.svg)](https://pypi.org/project/raiju/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![CI](https://github.com/seanpavlak/raiju/actions/workflows/ci.yml/badge.svg)](https://github.com/seanpavlak/raiju/actions)
+[![codecov](https://codecov.io/gh/seanpavlak/raiju/graph/badge.svg)](https://codecov.io/gh/seanpavlak/raiju)
+[![Discussions](https://img.shields.io/github/discussions/seanpavlak/raiju)](https://github.com/seanpavlak/raiju/discussions)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
 [**Docs**](https://raiju.sh)
 
-**PySpark, unleashed.** A thin wrapper around PySpark that exposes the full `SparkSession` API through a single, delegation-based interface, so you get all of Spark’s power with a minimal, extension-ready layer.
+Raiju is a **distributed PySpark execution framework** aimed at teams who need **maintainable orchestration** for data engineering workflows that stretch beyond simple columnar transforms—while staying **Spark-native** on the cluster.
 
-- **Full PySpark surface:** Every `SparkSession` API is available through Raiju via delegation. Nothing is reimplemented or locked in; new and future PySpark APIs work automatically.
-- **Drop-in entry point:** Use `Raiju` instead of `SparkSession`. Same builder, same methods, same DataFrames.
-- **Works everywhere:** Create a new session with the builder or wrap an existing one (e.g. `spark` in Databricks).
-- **Extension-ready:** A minimal foundation you can build on without forking PySpark.
-- **Single dependency:** PySpark 4.0+; no extra runtime deps.
+In one line: *Raiju is built on PySpark to simplify complex transformation orchestration, scalable UDF-style workflows, and (as the project grows) integrated local and remote inference for operational enrichment—without replacing Spark.*
 
-**Raiju** (雷獣, *raijū*) is a creature from Japanese folklore: a lightning beast and companion of the thunder god Raijin. The name means “thunder animal”: 雷 (*rai*, thunder) + 獣 (*jū*, beast). This project borrows it because it wraps **PySpark**, your engine for lightning-fast, distributed data, in a thin, flexible layer. All of Spark’s power is still there; Raiju is the interface that carries it.
+**Raiju** (雷獣, *raijū*) is a creature from Japanese folklore: a lightning beast and companion of the thunder god Raijin. The name fits a layer that rides **PySpark**, your engine for distributed data processing.
 
-Raiju aims to give you one clear entry point for PySpark while staying invisible: same APIs, same types, zero lock-in. You can adopt it gradually (e.g. wrap an existing `SparkSession` in Databricks) or use it as the base for your own extensions.
+## Table of contents
 
-## Table of Contents
-
-1. [Getting Started](#getting-started)
-1. [Usage](#usage)
-1. [How It Works](#how-it-works)
+1. [Why Raiju exists](#why-raiju-exists)
+1. [Core design goals](#core-design-goals)
+1. [Architecture overview](#architecture-overview)
+1. [Integrated inference workflows (direction)](#integrated-inference-workflows-direction)
+1. [Example workloads](#example-workloads)
+1. [What you get today](#what-you-get-today)
+1. [Roadmap](#roadmap)
+1. [Getting started](#getting-started)
+1. [Inference settings (Ollama / OpenRouter)](#inference-settings-ollama--openrouter)
+1. [Weave (broadcast-friendly joins)](#weave-broadcast-friendly-joins)
+1. [Weft (LLM schema aliasing and typing)](#weft-llm-schema-aliasing-and-typing)
+1. [DataFrame profiling](#dataframe-profiling)
+1. [How it works](#how-it-works)
 1. [Development](#development)
+1. [Changelog](#changelog)
 1. [Support](#support)
-1. [Show Your Support](#show-your-support)
-1. [Code of Conduct](#code-of-conduct)
+1. [Show your support](#show-your-support)
+1. [Code of conduct](#code-of-conduct)
 1. [Contributing](#contributing)
 1. [License](#license)
 1. [Security](#security)
 
-## Getting Started
+## Why Raiju exists
+
+Many **distributed data workflows** are hard to keep healthy when:
+
+- transformations need **cross-record** or **multi-field** reasoning
+- logic becomes **deeply procedural** across many steps
+- **orchestration** spans several enrichment or validation stages
+- you need **dynamic** execution choices without scattering `if` trees through jobs
+- **column-only** pipelines are hard to read or refactor
+- **UDF-heavy** pipelines become brittle operationally
+
+PySpark already gives you distributed compute. What teams often lack is a **clear, composable layer** for orchestration and advanced workflows—without giving up executors, partitions, and the rest of the Spark programming model. Raiju is meant to grow into that layer: **higher-level workflow composition** on top of **unchanged Spark execution**.
+
+## Core design goals
+
+- **Distributed-first:** Spark executors and cluster semantics stay central; Raiju coordinates and composes, it does not pretend compute is “local-first.”
+- **Workflow composition:** Modular pipelines and reusable building blocks instead of one-off scripts.
+- **Operational flexibility:** Room for local inference, remote providers, and hybrid patterns where privacy, cost, or latency demand it.
+- **Developer ergonomics:** Less bespoke glue for complex jobs; clearer boundaries between stages.
+- **Spark compatibility:** Same `DataFrame` types, same session APIs, same deployment story (including Databricks and on-prem clusters).
+
+## Architecture overview
+
+**Target shape:** Raiju sits as an **orchestration and execution abstraction** above Spark-native processing—handling transformation composition, coordination patterns, enrichment flows, and (optionally) inference calls—while **work still runs on Spark executors**.
+
+**Today:** the published library is a **thin, delegation-based `SparkSession` entry point** (see [What you get today](#what-you-get-today)). That is intentional: a **stable compatibility surface** before higher-level APIs land. The layering story above is where the project is headed; see [ROADMAP.md](ROADMAP.md) for concrete backlog items (diagrams, retries, partitioning docs, inference interfaces, benchmarks).
+
+## Integrated inference workflows (direction)
+
+Optional support for **LLM-assisted steps inside data pipelines** is part of the vision—framed as **operational enrichment**, not a separate “agent platform.”
+
+Planned execution styles to document and implement over time:
+
+- **Local inference** (for example via [Ollama](https://ollama.com/)) for low-latency or air-gapped settings
+- **Remote providers** (for example OpenRouter-compatible HTTP APIs) when external models are acceptable
+- **Hybrid** routing by policy (cost, privacy, SLA)
+
+Example workload types (all squarely “data engineering”):
+
+- semantic enrichment and tagging
+- entity normalization and fuzzy classification
+- metadata generation and schema hints
+- human-in-the-loop **review assistance** as a batch step
+- contextual transforms where a model proposes a value validated by rules
+
+Language in the project intentionally stays **grounded**: orchestration, enrichment, inference **hooks**—not hype around autonomy or “cognitive” stacks.
+
+You can **initialize `Raiju` with provider settings** (endpoints, default models, OpenRouter key resolution) so later orchestration can call into Ollama or OpenRouter without ad-hoc globals. Constructing `InferenceSettings` performs **no HTTP requests**—it only holds configuration. **Bounded driver-side HTTP** runs when you opt in to **[DataFrame profiling](#dataframe-profiling)** LLM enrichment or **[Weft](#weft-llm-schema-aliasing-and-typing)** canonicalization—both use **Pydantic**-validated model JSON, not free-form parsing. The same transport and JSON-object parsing live in **`raiju.inference.chat`** and are re-exported from **`raiju`** as **`inference_chat`**, **`parse_llm_json_object`**, and **`truncate_llm_text`** for custom tools or tests.
+
+## Example workloads
+
+Raiju is aimed at teams building **operational data systems** where jobs look like:
+
+- large-scale semantic enrichment
+- complex **mapPartitions** / UDF orchestration
+- fuzzy entity resolution and deduplication
+- metadata standardization across sources
+- multi-stage enrichment with checkpoints
+- operational anomaly or triage classification
+- hybrid **rules + model** scoring in batch
+- **dataset QA:** column-level profiles with optional LLM regex and format hints before publishing
+
+## What you get today
+
+**Release v0.1.3** ships a **single, extension-ready entry point** over PySpark plus profiling utilities:
+
+- **Full PySpark surface:** `Raiju` forwards the entire `SparkSession` API via delegation—no duplicated method lists; new PySpark APIs keep working as PySpark evolves.
+- **Drop-in usage:** `Raiju.builder...getOrCreate()` or `Raiju(spark)` when you already have a session (for example in Databricks).
+- **Inference settings on the session:** optional `InferenceSettings` (Ollama and/or OpenRouter) attached at construction or via `with_inference()` for builder flows (configuration only at init).
+- **`weave` joins:** optional `broadcast()` hints when one side is much smaller than the other, using bounded row-count inference (see [Weave (broadcast-friendly joins)](#weave-broadcast-friendly-joins)).
+- **Weft (schema prep):** `weft_dataframe` / `Raiju.weft` map messy source columns onto a **canonical dict-of-fields** you define, using **one bounded LLM call** plus **Pydantic** (`WeftResponse` / `WeftColumnMapping`), confidence guardrails, optional **Spark-native casts** (single `select`), optional **`python-dateutil`** fuzzy timestamps when the model requests that path, and optional **struct** output. See [Weft (LLM schema aliasing and typing)](#weft-llm-schema-aliasing-and-typing).
+- **DataFrame profiling:** `profile_dataframe` / `Raiju.profile` compute rich per-column stats in Spark-native aggregates (optional `freqItems`, optional bounded **LLM** enrichment with **Pydantic**-validated JSON and **tiktoken** token estimates). See [DataFrame profiling](#dataframe-profiling).
+- **Inference transport (library API):** `inference_chat`, `parse_llm_json_object`, and `truncate_llm_text` from `raiju` (implemented in `raiju.inference.chat`) — same Ollama/OpenRouter routing, timeouts, and JSON fence handling Weft and profiling use; useful for bespoke prompts outside those entry points.
+- **Runtime dependencies:** `pyspark>=4.0`, `pydantic>=2.5`, `tiktoken>=0.7`, `python-dateutil>=2.8` (dateutil is used when Weft applies a model-requested fuzzy-parse strategy; profiling does not require it for core stats).
+
+Higher-level orchestration beyond Weft, profiling, `weave`, generic HTTP inference clients, and operational guides are **on the roadmap** ([ROADMAP.md](ROADMAP.md)).
+
+## Roadmap
+
+See **[ROADMAP.md](ROADMAP.md)** for a structured backlog: execution and DAG diagrams, failure handling and retry semantics, partitioning and serialization notes, benchmarks, orchestration APIs, optional inference backends, and hardening for production pipelines.
+
+## Getting started
 
 ### Installation
 
-Raiju is available as [`raiju`](https://pypi.org/project/raiju/) on PyPI (or install from source).
+Raiju is published as [`raiju`](https://pypi.org/project/raiju/) on PyPI.
 
-Invoke or install with **uv** (recommended), **pip**, or **pipx**:
+With **uv** (recommended), **pip**, or **pipx**:
 
 ```shell
 # With uv.
@@ -80,7 +174,7 @@ For development (linting, formatting, tests):
 pip install -e ".[dev]"
 ```
 
-**Requirements:** Python 3.9+, PySpark 4.0+.
+**Requirements:** Python 3.9+, PySpark 4.0+, plus **pydantic**, **tiktoken**, and **python-dateutil** (pulled in automatically with `pip install raiju`).
 
 ### Usage
 
@@ -92,7 +186,7 @@ from raiju import Raiju
 raiju = Raiju.builder.appName("my_app").master("local[*]").getOrCreate()
 ```
 
-Or wrap an existing session (e.g. in Databricks):
+Or wrap an existing session (for example in Databricks):
 
 ```python
 from raiju import Raiju
@@ -117,13 +211,350 @@ raiju.catalog.listTables()
 raiju.conf.set("key", "value")
 ```
 
-Any attribute or method on `SparkSession` is available on your `Raiju` instance; returned objects (DataFrames, etc.) are standard PySpark types.
+Returned objects are standard PySpark types.
 
-## How It Works
+Quick **profile** (Spark-side stats only; see [DataFrame profiling](#dataframe-profiling) for LLM options):
 
-- **No hardcoded API:** `Raiju` and its builder use `__getattr__` to forward to the real `SparkSession` (and `SparkSession.builder`). New PySpark methods and options work without changes to Raiju.
-- **Single entry point:** You get a `Raiju` instance; `.read`, `.sql`, `.range`, and everything else behave as in PySpark.
-- **Thin wrapper:** This layer is the base; you can add behavior on top without reimplementing Spark.
+```python
+from raiju import ProfileOptions, profile_dataframe
+
+sample = raiju.range(1_000).toDF("id")
+print(profile_dataframe(sample, options=ProfileOptions())["row_count"])
+```
+
+### Inference settings (Ollama / OpenRouter)
+
+Attach **one or both** backends so profiling LLM enrichment and future Raiju execution can read models and endpoints from `raiju.inference` (no network I/O at init):
+
+```python
+from pyspark.sql import SparkSession
+from raiju import InferenceSettings, OllamaConfig, OpenRouterConfig, Raiju
+
+spark = SparkSession.builder.appName("enrich").master("local[*]").getOrCreate()
+raiju = Raiju(
+    spark,
+    inference=InferenceSettings(
+        ollama=OllamaConfig(default_model="llama3.2"),
+        openrouter=OpenRouterConfig(
+            default_model="anthropic/claude-3.5-sonnet",
+            # api_key=None → reads OPENROUTER_API_KEY from the environment (emits a UserWarning once at config construction)
+        ),
+    ),
+)
+
+assert raiju.inference is not None
+assert raiju.inference.ollama.default_model == "llama3.2"
+assert raiju.inference.openrouter.resolved_api_key() is not None  # if env is set
+```
+
+If you use **`Raiju.builder...getOrCreate()`**, the builder still returns a bare `Raiju`; chain **`with_inference(...)`** on the result (same underlying `SparkSession`):
+
+```python
+from raiju import InferenceSettings, OllamaConfig, Raiju
+
+raiju = Raiju.builder.appName("enrich").master("local[*]").getOrCreate().with_inference(
+    InferenceSettings(ollama=OllamaConfig(default_model="llama3.2"))
+)
+```
+
+## Weave (broadcast-friendly joins)
+
+`weave` joins two PySpark `DataFrame`s and can attach Spark’s **`broadcast()`** hint when one relation is clearly much smaller than the other. The decision uses **bounded counts**—at most `bounded_count_cap + 1` rows are counted per side—so you avoid a full `count()` on huge tables while still getting an explicit hint when the skew is obvious.
+
+Spark’s planner already **auto-broadcasts** when estimated size is under [`spark.sql.autoBroadcastJoinThreshold`](https://spark.apache.org/docs/latest/sql-performance-tuning.html#other-configuration-options). Use `weave` when statistics are missing or conservative and you still want a deliberate broadcast join path.
+
+### `Raiju.weave`
+
+On a `Raiju` session, `weave` delegates to the same join logic as the module function (bounded counts and `broadcast()` hints only—no inference or LLM calls):
+
+```python
+from pyspark.sql import SparkSession
+from raiju import Raiju
+
+spark = SparkSession.builder.appName("demo").master("local[*]").getOrCreate()
+raiju = Raiju(spark)
+
+result = raiju.weave(large_df, small_df, on="id", how="left_outer")
+```
+
+With the builder:
+
+```python
+from raiju import Raiju
+
+raiju = Raiju.builder.appName("demo").master("local[*]").getOrCreate()
+out = raiju.weave(facts, dim, on="sk", how="inner")
+```
+
+### `weave` from the module
+
+The same behavior is available without a `Raiju` wrapper—useful in shared libraries or plain `SparkSession` code:
+
+```python
+from raiju import BroadcastJoinPolicy, weave
+
+out = weave(
+    large_df,
+    small_df,
+    on="id",
+    how="inner",
+    policy=BroadcastJoinPolicy(
+        bounded_count_cap=50_000,
+        max_small_to_large_ratio=0.15,
+    ),
+)
+```
+
+### `broadcast_side`
+
+| Value | Behavior |
+|-------|----------|
+| `"auto"` (default) | Infer which side to broadcast from bounded counts and `BroadcastJoinPolicy`. |
+| `"left"` / `"right"` | Force `broadcast()` on that operand. |
+| `"none"` | Ordinary `join` with no broadcast hint. |
+
+### `BroadcastJoinPolicy` fields
+
+| Field | Default | Role |
+|-------|---------|------|
+| `bounded_count_cap` | `100_000` | Each side uses `limit(cap + 1).count()` so at most `cap + 1` rows are read for the decision. |
+| `max_small_to_large_ratio` | `0.2` | Broadcast only if the smaller bounded count is at most this fraction of the larger. |
+| `ambiguous_when_both_at_cap` | `True` | If both sides hit `cap + 1`, skip broadcasting (sizes are unclear). |
+
+Tune these together with executor memory and `spark.sql.autoBroadcastJoinThreshold` so broadcast joins stay within cluster limits.
+
+## Weft (LLM schema aliasing and typing)
+
+**Weft** aligns a PySpark `DataFrame` to a **canonical schema** you describe: keys are target column names, values are natural-language field descriptions (examples, semantics, edge cases). A **single** bounded LLM request (aggregates + capped samples per column, similar spirit to profiling enrichment) proposes **rename + typing** decisions. Raiju validates the reply with **Pydantic**, applies **confidence guardrails**, then builds the result in **one Spark `select`** from the original frame—no `withColumn` chains for the canonical block.
+
+Typical flow: **Weft** normalizes column semantics and types; **[Weave](#weave-broadcast-friendly-joins)** can join normalized datasets. Together they are the “prep + link” story for messy sources.
+
+### Requirements
+
+- **`InferenceSettings`** on the session (or passed explicitly) with Ollama and/or OpenRouter—same configuration model as profiling enrichment.
+- A non-empty **`structure`** mapping: `canonical_name → description string`.
+
+### `Raiju.weft` and `weft_dataframe`
+
+```python
+from raiju import InferenceSettings, OllamaConfig, Raiju
+
+raiju = Raiju(spark, inference=InferenceSettings(ollama=OllamaConfig(default_model="llama3.2")))
+
+structure = {
+    "payee_name": "Entity receiving payment; vendor or person name.",
+    "payment_amount": "Numeric payment amount; may include currency symbols in source.",
+    "payment_date": "Date the payment was recorded; many string formats possible.",
+}
+
+mapped, report = raiju.weft(
+    df,
+    structure,
+    min_confidence=0.85,
+    require_review_below=0.95,
+    allow_unmapped=False,
+    return_report=True,
+)
+# report: accepted_mappings, accepted_specs, typing_applied, nullability_applied,
+# needs_review, review_suggested, ignored_columns, confidence_scores,
+# weft_advisory, struct_schema_simple (if output="struct"), llm_token_usage, …
+```
+
+The module function `weft_dataframe(df, structure, inference, ...)` is the same API without a `Raiju` wrapper. For tests or custom pipelines, **`resolve_weft_mappings`** applies guardrails to an already-validated `WeftResponse` without HTTP.
+
+### Main options
+
+| Parameter | Default | Role |
+|-----------|---------|------|
+| `min_confidence` | `0.85` | Below this, a model `map` is not applied (column stays unresolved unless `ignore`). |
+| `require_review_below` | `0.95` | Applied maps in `[min_confidence, require_review_below)` are listed under `report["review_suggested"]`. |
+| `allow_unmapped` | `False` | If `False`, error when a source column is neither accepted nor explicitly ignored after rules. |
+| `allow_many_to_one` | `False` | If `False`, multiple sources mapping to one target are withheld and flagged; if `True`, highest-confidence source wins, others flagged. |
+| `apply_typing` | `True` | Coerce to `target_spark_type` from the model (strings → safe numeric/temporal paths, `try_to_timestamp` coalesce, optional **dateutil** UDF when requested). |
+| `output` | `"flat"` | `"flat"` — one column per canonical key in `structure` order. `"struct"` — nest them under `struct_name`. |
+| `struct_name` | `"weft"` | Struct column name when `output="struct"`. |
+| `keep_extra_columns` | `False` | Append unmapped, non-ignored source columns after the canonical block (still one `select`). |
+| `emit_weft_warnings` | `True` | Emit **`WeftWarning`** for missing canonical slots, dateutil throughput, default date formats, etc. |
+| `provider` | `"auto"` | `"ollama"`, `"openrouter"`, or `"auto"` (prefer Ollama if configured); normalized case-insensitively. |
+| `http_timeout_s` | `120` | Per-request HTTP timeout for the Weft LLM call (must be positive). |
+| `sample_scan_limit` / `max_sample_values` / `max_value_chars` | `120` / `14` / `280` | Bound the evidence payload sent to the model. |
+
+### Pydantic contract (Weft)
+
+Import from `raiju` or `raiju.inference`:
+
+- **`WeftResponse`** — `mappings`, `unmapped_columns`, `ambiguous_columns`, `notes`.
+- **`WeftColumnMapping`** — per source column: `target_column`, `confidence`, `reason`, `action` (`map` \| `ignore` \| `needs_review`), **`target_spark_type`**, **`nullable`**, decimal precision/scale, **`temporal_parse_strategy`** (`native` \| `spark_formats` \| `python_dateutil`), **`spark_timestamp_formats`**, **`python_dateutil_fuzzy`**.
+- **`WeftWarning`** — advisories for casts, missing canonical fields, and fuzzy date UDF use (filter with `warnings.filterwarnings`).
+
+### Performance and safety notes
+
+- **Single scan for the canonical projection:** renames and casts are expressed as one `select` of column expressions (plus optional extra columns).
+- **dateutil** runs inside a **Python UDF** only when the validated model output sets `temporal_parse_strategy` to `python_dateutil`; prefer `spark_formats` with explicit patterns when possible.
+- **Token usage:** successful Weft HTTP calls attach **`llm_token_usage`** to the report and emit **`RaijuLLMUsageWarning`** the same way profiling enrichment does.
+
+## DataFrame profiling
+
+`profile_dataframe` (and `Raiju.profile`) summarize a PySpark `DataFrame` with **Spark-native aggregates**—one wide `agg` over the input for most metrics, plus optional **`freqItems`** and optional **driver-side LLM enrichment** when you attach `InferenceSettings` and opt in. This path is built for throughput: it does **not** scan the table in a Python row UDF to compute column stats.
+
+### What you get
+
+- **Row and column metrics:** null counts, completeness, approximate distinct counts, type-aware stats (numeric percentiles / skew / kurtosis, string length and lexicographic bounds, booleans, timestamps, arrays, maps, and more).
+- **`describe`-style blocks** under each column where applicable, plus structured JSON-friendly output (`collect=True` by default scrubs NaN/inf for logging).
+- **Optional `freqItems`:** approximate frequent values / mode-style candidates (`ProfileOptions.include_freq_items`).
+- **Optional LLM layer:** when `inference` is `InferenceSettings` and `inference_enrichment=True`, Raiju sends **aggregates plus a capped row sample** (single bounded `collect`) to Ollama or OpenRouter. The model returns JSON validated by **Pydantic** (`ProfileEnrichmentResponse`). Suggested regexes are checked with Python `re.compile`; failures become `UserWarning`s and null `llm` payloads.
+- **Token accounting:** prompt and completion sizes are estimated with **tiktoken** (`build_llm_token_usage`); provider-reported usage is copied under `raw_usage["api"]` for audit only. After a successful HTTP call, Raiju emits **`RaijuLLMUsageWarning`** with the tiktoken totals (filter with `warnings.filterwarnings` if needed).
+
+### `profile_dataframe` (function API)
+
+```python
+from raiju import ProfileOptions, profile_dataframe
+
+profile = profile_dataframe(
+    df,
+    options=ProfileOptions(
+        percentiles=[0.25, 0.5, 0.75],
+        include_freq_items=True,
+        freq_items_support=0.05,
+        columns=["user_id", "event_ts", "payload"],  # optional subset
+    ),
+)
+print(profile["row_count"])
+print(profile["columns"]["user_id"]["approx_distinct"])
+print(profile["approximate_spark_actions"])  # 1 + 1 if freqItems ran
+```
+
+### `Raiju.profile` (session shortcut)
+
+Same as `profile_dataframe`, and forwards **`Raiju.inference`** when you omit `inference=`:
+
+```python
+from raiju import InferenceSettings, OllamaConfig, ProfileOptions, Raiju
+
+raiju = Raiju(spark, inference=InferenceSettings(ollama=OllamaConfig(default_model="llama3.2")))
+prof = raiju.profile(df, options=ProfileOptions(inference_enrichment=True))
+```
+
+### LLM enrichment options (`ProfileOptions`)
+
+| Field | Default | Role |
+|-------|---------|------|
+| `inference_enrichment` | `False` | When `True` and `inference` is `InferenceSettings`, run the bounded LLM pass. |
+| `inference_provider` | `"auto"` | `"auto"` prefers Ollama if configured, else OpenRouter; or force `"ollama"` / `"openrouter"`. |
+| `inference_http_timeout_s` | `120` | HTTP timeout for the chat request. |
+| `inference_max_columns` | `28` | Max columns sent to the model (prioritizes strings, temporal, boolean, then low-cardinality numerics). |
+| `inference_sample_scan_limit` | `120` | Max rows read for the batched sample `select`. |
+| `inference_max_sample_values` | `14` | Max distinct sample strings/values per column in the payload. |
+| `inference_max_value_chars` | `280` | Truncate sample cell text for the prompt. |
+
+### Pydantic types (LLM JSON contract)
+
+Import from `raiju` or `raiju.inference`:
+
+- **`ProfileEnrichmentResponse`** — root object with `columns: list[ProfileEnrichmentColumn]`.
+- **`ProfileEnrichmentColumn`** — one column’s LLM fields (`human_summary`, `suggested_validation_regex`, `java_simple_date_format`, `python_strptime_directive`, `pii_likelihood`, …).
+- **`WeftResponse`** / **`WeftColumnMapping`** — Weft LLM JSON contract (see [Weft](#weft-llm-schema-aliasing-and-typing)).
+- **`WeftWarning`** — Weft-specific advisory warnings.
+- **`LLMTokenUsage`** — normalized token fields plus `raw_usage` (`tiktoken` metadata + `api` blob).
+
+### `profile_to_describe_rows`
+
+Flatten `describe`-compatible entries into row records (for notebooks or small tables):
+
+```python
+from raiju import profile_dataframe, profile_to_describe_rows
+
+prof = profile_dataframe(df)
+rows = profile_to_describe_rows(prof)
+# each row: {"summary": "mean"|"count"|..., "column": str, "value": ...}
+```
+
+### OpenRouter example (explicit API key)
+
+```python
+import warnings
+
+from raiju import (
+    InferenceSettings,
+    OpenRouterConfig,
+    ProfileOptions,
+    RaijuLLMUsageWarning,
+    profile_dataframe,
+)
+
+warnings.simplefilter("always", RaijuLLMUsageWarning)
+
+inf = InferenceSettings(
+    openrouter=OpenRouterConfig(
+        api_key="sk-or-...",  # or None + OPENROUTER_API_KEY
+        default_model="openai/gpt-4o-mini",
+    ),
+)
+
+prof = profile_dataframe(
+    df,
+    inference=inf,
+    options=ProfileOptions(
+        inference_enrichment=True,
+        inference_provider="openrouter",
+        inference_max_columns=12,
+    ),
+)
+
+assert prof.get("llm_enrichment", {}).get("status") in ("ok", "failed")
+print(prof.get("llm_token_usage"))  # tiktoken-based totals when HTTP succeeded
+```
+
+### Advanced: reuse the same chat transport
+
+Weft and profiling both call **`inference_chat`** under the hood. For a **custom** system prompt and user payload (still one bounded request), use the same API and token accounting:
+
+```python
+from raiju import InferenceSettings, OllamaConfig, inference_chat
+
+inf = InferenceSettings(ollama=OllamaConfig(default_model="llama3.2"))
+used, text, usage = inference_chat(
+    inf,
+    system="You reply with a single JSON object only.",
+    user='{"task": "ping"}',
+    provider="auto",
+    http_timeout_s=60.0,
+    purpose="my_tool",
+)
+# `usage` is normally present; call usage.warn_if_known() like Weft does after a successful call.
+```
+
+**`parse_llm_json_object`** strips optional Markdown JSON fences and returns a **dict** or `None` if the model did not return a JSON object. **`truncate_llm_text`** caps strings for prompts and logs.
+
+### Advanced: count tokens outside profiling
+
+If you have raw strings (for example from another tool), you can reuse the same accounting Raiju uses after HTTP:
+
+```python
+from raiju import build_llm_token_usage
+
+usage = build_llm_token_usage(
+    provider="openrouter",
+    model="openai/gpt-4o-mini",
+    system="You are a helpful assistant.",
+    user='{"task": "summarize"}',
+    assistant='{"ok": true}',
+    raw_api_response={},  # optional provider JSON to stash under raw_usage["api"]
+)
+print(usage.total_tokens, usage.model_dump()["raw_usage"]["tiktoken"]["encoding"])
+```
+
+### Notes
+
+- **Cost and privacy:** LLM enrichment sends bounded aggregates and samples only, but still leaves your network boundary—treat models and prompts like production data.
+- **Spark actions:** Profiling always runs at least one aggregate action; `freqItems` and LLM sampling add additional actions documented in `approximate_spark_actions`.
+
+## How it works
+
+- **No hardcoded API surface:** `Raiju` and its builder use `__getattr__` to forward to the real `SparkSession` (and `SparkSession.builder`).
+- **Single entry point:** You hold a `Raiju` instance; `.read`, `.sql`, `.range`, and the rest behave as in PySpark.
+- **Composable helpers:** `weave`, `weft`, `profile` / `profile_dataframe`, `weft_dataframe` / `resolve_weft_mappings`, and **`inference_chat`** / **`parse_llm_json_object`** / **`truncate_llm_text`** live on `Raiju` or as module functions without replacing `DataFrame` types.
+- **Thin foundation:** This layer is the base for future orchestration and enrichment utilities without forking PySpark.
 
 ## Development
 
@@ -134,11 +565,15 @@ ruff format raiju/ tests/
 pytest tests/ -v
 ```
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for release history.
+
 ## Support
 
 Having trouble? Open an [issue](https://github.com/seanpavlak/raiju/issues) on GitHub.
 
-## Code of Conduct
+## Code of conduct
 
 This project adheres to the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code.
 
@@ -146,12 +581,12 @@ This project adheres to the [Contributor Covenant Code of Conduct](CODE_OF_CONDU
 
 Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for how to get started.
 
-## Show Your Support
+## Show your support
 
-If you're using Raiju, consider adding the Raiju badge to your project's `README.md`:
+If you are using Raiju, consider adding the Raiju badge to your project’s `README.md`:
 
 ```md
-[![Raiju](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/seanpavlak/raiju/refs/heads/main/assets/badge.json)](https://github.com/seanpavlak/raiju)
+[![Raiju](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/seanpavlak/raiju/main/assets/badge.json)](https://github.com/seanpavlak/raiju)
 ```
 
 ## License

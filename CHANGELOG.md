@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Declare **`eval-type-backport`** for **Python 3.9** so Pydantic v2 can evaluate modern union annotations (`int | None`, etc.) used in `llm_schemas` and elsewhere; restores CI on the 3.9 matrix.
+
 ## [0.1.3] - 2026-05-13
 
 ### Added
