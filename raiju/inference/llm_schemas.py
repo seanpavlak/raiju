@@ -6,18 +6,25 @@ import re
 import warnings
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 __all__ = [
     "LLMTokenUsage",
     "ProfileEnrichmentColumn",
     "ProfileEnrichmentResponse",
     "RaijuLLMUsageWarning",
+    "WeftColumnMapping",
+    "WeftResponse",
+    "WeftWarning",
 ]
 
 
 class RaijuLLMUsageWarning(UserWarning):
     """Emitted after a successful LLM HTTP call with best-effort token counts."""
+
+
+class WeftWarning(UserWarning):
+    """Advisory for casts, missing canonical slots, fuzzy date UDFs, and coercion."""
 
 
 class LLMTokenUsage(BaseModel):
@@ -101,3 +108,99 @@ class ProfileEnrichmentResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     columns: list[ProfileEnrichmentColumn]
+
+
+class WeftColumnMapping(BaseModel):
+    """One source column decision from the Weft schema-mapping LLM."""
+
+    model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
+
+    source_column: str
+    target_column: str | None = None
+    confidence: float = Field(ge=0, le=1)
+    reason: str
+    action: Literal["map", "ignore", "needs_review"]
+    # Typing / nullability (used when action is "map" after guardrails accept the map)
+    target_spark_type: Literal[
+        "string",
+        "boolean",
+        "byte",
+        "short",
+        "int",
+        "long",
+        "float",
+        "double",
+        "decimal",
+        "date",
+        "timestamp",
+        "timestamp_ntz",
+    ] = "string"
+    nullable: bool = True
+    decimal_precision: int | None = Field(default=None, ge=1, le=38)
+    decimal_scale: int | None = Field(default=None, ge=0, le=18)
+    temporal_parse_strategy: Literal[
+        "native",
+        "spark_formats",
+        "python_dateutil",
+    ] = "native"
+    spark_timestamp_formats: list[str] = Field(default_factory=list)
+    python_dateutil_fuzzy: bool = False
+
+    @field_validator("spark_timestamp_formats", mode="before")
+    @classmethod
+    def _cap_ts_formats(cls, v: Any) -> list[str]:
+        if v is None:
+            return []
+        if isinstance(v, list):
+            return [str(x)[:120] for x in v[:12]]
+        return []
+
+    @model_validator(mode="after")
+    def _action_target_consistency(self) -> WeftColumnMapping:
+        if self.action == "map":
+            if self.target_column is None or not str(self.target_column).strip():
+                raise ValueError("action 'map' requires a non-empty target_column")
+        return self
+
+    @model_validator(mode="after")
+    def _decimal_fields_when_needed(self) -> WeftColumnMapping:
+        if self.action != "map":
+            return self
+        if self.target_spark_type != "decimal":
+            return self
+        if self.decimal_precision is None and self.decimal_scale is not None:
+            raise ValueError(
+                "decimal_scale requires decimal_precision for weft mapping"
+            )
+        return self
+
+
+class WeftResponse(BaseModel):
+    """Structured reply the Weft LLM must return (validated before rename)."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    mappings: list[WeftColumnMapping]
+    unmapped_columns: list[str] = Field(default_factory=list)
+    ambiguous_columns: list[str] = Field(default_factory=list)
+    notes: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _unique_mapping_sources(self) -> WeftResponse:
+        seen: set[str] = set()
+        for m in self.mappings:
+            if m.source_column in seen:
+                raise ValueError(
+                    f"duplicate mappings.source_column: {m.source_column!r}"
+                )
+            seen.add(m.source_column)
+        return self
+
+    @field_validator("unmapped_columns", "ambiguous_columns", "notes", mode="before")
+    @classmethod
+    def _string_list(cls, v: Any) -> list[str]:
+        if v is None:
+            return []
+        if isinstance(v, list):
+            return [str(x) for x in v[:256]]
+        return []

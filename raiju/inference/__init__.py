@@ -9,6 +9,9 @@ from raiju.inference.llm_schemas import (
     ProfileEnrichmentColumn,
     ProfileEnrichmentResponse,
     RaijuLLMUsageWarning,
+    WeftColumnMapping,
+    WeftResponse,
+    WeftWarning,
 )
 from raiju.inference.settings import InferenceSettings, OllamaConfig, OpenRouterConfig
 from raiju.inference.token_count import build_llm_token_usage
@@ -21,5 +24,8 @@ __all__ = [
     "ProfileEnrichmentColumn",
     "ProfileEnrichmentResponse",
     "RaijuLLMUsageWarning",
+    "WeftColumnMapping",
+    "WeftResponse",
+    "WeftWarning",
     "build_llm_token_usage",
 ]

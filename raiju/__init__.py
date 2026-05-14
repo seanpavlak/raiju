@@ -12,11 +12,15 @@ from raiju.inference import (
     ProfileEnrichmentColumn,
     ProfileEnrichmentResponse,
     RaijuLLMUsageWarning,
+    WeftColumnMapping,
+    WeftResponse,
+    WeftWarning,
     build_llm_token_usage,
 )
 from raiju.joins import BroadcastJoinPolicy, weave
 from raiju.profile import ProfileOptions, profile_dataframe, profile_to_describe_rows
 from raiju.session import Raiju
+from raiju.weft import resolve_weft_mappings, weft_dataframe
 
 __all__ = [
     "BroadcastJoinPolicy",
@@ -29,8 +33,13 @@ __all__ = [
     "ProfileOptions",
     "Raiju",
     "RaijuLLMUsageWarning",
+    "WeftColumnMapping",
+    "WeftResponse",
+    "WeftWarning",
     "build_llm_token_usage",
     "profile_dataframe",
     "profile_to_describe_rows",
+    "resolve_weft_mappings",
     "weave",
+    "weft_dataframe",
 ]

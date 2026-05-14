@@ -12,6 +12,7 @@ from raiju.inference.settings import InferenceSettings
 from raiju.joins import BroadcastJoinPolicy, BroadcastSideSpec
 from raiju.joins import weave as weave_fn
 from raiju.profile import profile_dataframe
+from raiju.weft import weft_dataframe
 
 
 class _RaijuBuilder:
@@ -92,6 +93,20 @@ class Raiju:
         """
         inf = self._inference if inference is None else inference
         return profile_dataframe(df, inference=inf, **kwargs)
+
+    def weft(self, df, structure, *, inference=None, **kwargs):
+        """Canonicalize column names via bounded LLM inference.
+
+        See :func:`raiju.weft.weft_dataframe` for parameters and return shape.
+        When ``inference`` is omitted, :attr:`Raiju.inference` is used and must
+        be set.
+        """
+        inf = self._inference if inference is None else inference
+        if inf is None:
+            raise TypeError(
+                "weft requires inference=InferenceSettings or Raiju(..., inference=...)"
+            )
+        return weft_dataframe(df, structure, inf, **kwargs)
 
     def with_inference(self, inference: InferenceSettings) -> Raiju:
         """Return a new ``Raiju`` with the same Spark session and inference settings.

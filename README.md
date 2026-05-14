@@ -30,6 +30,7 @@ In one line: *Raiju is built on PySpark to simplify complex transformation orche
 1. [Getting started](#getting-started)
 1. [Inference settings (Ollama / OpenRouter)](#inference-settings-ollama--openrouter)
 1. [Weave (broadcast-friendly joins)](#weave-broadcast-friendly-joins)
+1. [Weft (LLM schema aliasing and typing)](#weft-llm-schema-aliasing-and-typing)
 1. [DataFrame profiling](#dataframe-profiling)
 1. [How it works](#how-it-works)
 1. [Development](#development)
@@ -88,7 +89,7 @@ Example workload types (all squarely “data engineering”):
 
 Language in the project intentionally stays **grounded**: orchestration, enrichment, inference **hooks**—not hype around autonomy or “cognitive” stacks.
 
-You can **initialize `Raiju` with provider settings** (endpoints, default models, OpenRouter key resolution) so later orchestration can call into Ollama or OpenRouter without ad-hoc globals. Constructing `InferenceSettings` performs **no HTTP requests**—it only holds configuration. **Optional [DataFrame profiling](#dataframe-profiling)** can perform bounded driver-side HTTP to Ollama or OpenRouter when you enable LLM enrichment on a profile run.
+You can **initialize `Raiju` with provider settings** (endpoints, default models, OpenRouter key resolution) so later orchestration can call into Ollama or OpenRouter without ad-hoc globals. Constructing `InferenceSettings` performs **no HTTP requests**—it only holds configuration. **Bounded driver-side HTTP** runs when you opt in to **[DataFrame profiling](#dataframe-profiling)** LLM enrichment or **[Weft](#weft-llm-schema-aliasing-and-typing)** canonicalization—both use **Pydantic**-validated model JSON, not free-form parsing.
 
 ## Example workloads
 
@@ -111,10 +112,11 @@ Raiju is aimed at teams building **operational data systems** where jobs look li
 - **Drop-in usage:** `Raiju.builder...getOrCreate()` or `Raiju(spark)` when you already have a session (for example in Databricks).
 - **Inference settings on the session:** optional `InferenceSettings` (Ollama and/or OpenRouter) attached at construction or via `with_inference()` for builder flows (configuration only at init).
 - **`weave` joins:** optional `broadcast()` hints when one side is much smaller than the other, using bounded row-count inference (see [Weave (broadcast-friendly joins)](#weave-broadcast-friendly-joins)).
+- **Weft (schema prep):** `weft_dataframe` / `Raiju.weft` map messy source columns onto a **canonical dict-of-fields** you define, using **one bounded LLM call** plus **Pydantic** (`WeftResponse` / `WeftColumnMapping`), confidence guardrails, optional **Spark-native casts** (single `select`), optional **`python-dateutil`** fuzzy timestamps when the model requests that path, and optional **struct** output. See [Weft (LLM schema aliasing and typing)](#weft-llm-schema-aliasing-and-typing).
 - **DataFrame profiling:** `profile_dataframe` / `Raiju.profile` compute rich per-column stats in Spark-native aggregates (optional `freqItems`, optional bounded **LLM** enrichment with **Pydantic**-validated JSON and **tiktoken** token estimates). See [DataFrame profiling](#dataframe-profiling).
-- **Runtime dependencies:** `pyspark>=4.0`, `pydantic>=2.5`, `tiktoken>=0.7` (installed with the package; used for profiling validation and token accounting, not for core `Raiju` delegation).
+- **Runtime dependencies:** `pyspark>=4.0`, `pydantic>=2.5`, `tiktoken>=0.7`, `python-dateutil>=2.8` (dateutil is used when Weft applies a model-requested fuzzy-parse strategy; profiling does not require it for core stats).
 
-Higher-level orchestration beyond profiling, generic HTTP inference clients, and operational guides are **on the roadmap** ([ROADMAP.md](ROADMAP.md)).
+Higher-level orchestration beyond Weft, profiling, `weave`, generic HTTP inference clients, and operational guides are **on the roadmap** ([ROADMAP.md](ROADMAP.md)).
 
 ## Roadmap
 
@@ -152,7 +154,7 @@ For development (linting, formatting, tests):
 pip install -e ".[dev]"
 ```
 
-**Requirements:** Python 3.9+, PySpark 4.0+, plus **pydantic** and **tiktoken** (pulled in automatically with `pip install raiju`).
+**Requirements:** Python 3.9+, PySpark 4.0+, plus **pydantic**, **tiktoken**, and **python-dateutil** (pulled in automatically with `pip install raiju`).
 
 ### Usage
 
@@ -301,6 +303,75 @@ out = weave(
 
 Tune these together with executor memory and `spark.sql.autoBroadcastJoinThreshold` so broadcast joins stay within cluster limits.
 
+## Weft (LLM schema aliasing and typing)
+
+**Weft** aligns a PySpark `DataFrame` to a **canonical schema** you describe: keys are target column names, values are natural-language field descriptions (examples, semantics, edge cases). A **single** bounded LLM request (aggregates + capped samples per column, similar spirit to profiling enrichment) proposes **rename + typing** decisions. Raiju validates the reply with **Pydantic**, applies **confidence guardrails**, then builds the result in **one Spark `select`** from the original frame—no `withColumn` chains for the canonical block.
+
+Typical flow: **Weft** normalizes column semantics and types; **[Weave](#weave-broadcast-friendly-joins)** can join normalized datasets. Together they are the “prep + link” story for messy sources.
+
+### Requirements
+
+- **`InferenceSettings`** on the session (or passed explicitly) with Ollama and/or OpenRouter—same configuration model as profiling enrichment.
+- A non-empty **`structure`** mapping: `canonical_name → description string`.
+
+### `Raiju.weft` and `weft_dataframe`
+
+```python
+from raiju import InferenceSettings, OllamaConfig, Raiju
+
+raiju = Raiju(spark, inference=InferenceSettings(ollama=OllamaConfig(default_model="llama3.2")))
+
+structure = {
+    "payee_name": "Entity receiving payment; vendor or person name.",
+    "payment_amount": "Numeric payment amount; may include currency symbols in source.",
+    "payment_date": "Date the payment was recorded; many string formats possible.",
+}
+
+mapped, report = raiju.weft(
+    df,
+    structure,
+    min_confidence=0.85,
+    require_review_below=0.95,
+    allow_unmapped=False,
+    return_report=True,
+)
+# report: accepted_mappings, accepted_specs, typing_applied, nullability_applied,
+# needs_review, review_suggested, ignored_columns, confidence_scores,
+# weft_advisory, struct_schema_simple (if output="struct"), llm_token_usage, …
+```
+
+The module function `weft_dataframe(df, structure, inference, ...)` is the same API without a `Raiju` wrapper. For tests or custom pipelines, **`resolve_weft_mappings`** applies guardrails to an already-validated `WeftResponse` without HTTP.
+
+### Main options
+
+| Parameter | Default | Role |
+|-----------|---------|------|
+| `min_confidence` | `0.85` | Below this, a model `map` is not applied (column stays unresolved unless `ignore`). |
+| `require_review_below` | `0.95` | Applied maps in `[min_confidence, require_review_below)` are listed under `report["review_suggested"]`. |
+| `allow_unmapped` | `False` | If `False`, error when a source column is neither accepted nor explicitly ignored after rules. |
+| `allow_many_to_one` | `False` | If `False`, multiple sources mapping to one target are withheld and flagged; if `True`, highest-confidence source wins, others flagged. |
+| `apply_typing` | `True` | Coerce to `target_spark_type` from the model (strings → safe numeric/temporal paths, `try_to_timestamp` coalesce, optional **dateutil** UDF when requested). |
+| `output` | `"flat"` | `"flat"` — one column per canonical key in `structure` order. `"struct"` — nest them under `struct_name`. |
+| `struct_name` | `"weft"` | Struct column name when `output="struct"`. |
+| `keep_extra_columns` | `False` | Append unmapped, non-ignored source columns after the canonical block (still one `select`). |
+| `emit_weft_warnings` | `True` | Emit **`WeftWarning`** for missing canonical slots, dateutil throughput, default date formats, etc. |
+| `provider` | `"auto"` | `"ollama"`, `"openrouter"`, or `"auto"` (prefer Ollama if configured). |
+| `sample_scan_limit` / `max_sample_values` / `max_value_chars` | `120` / `14` / `280` | Bound the evidence payload sent to the model. |
+
+### Pydantic contract (Weft)
+
+Import from `raiju` or `raiju.inference`:
+
+- **`WeftResponse`** — `mappings`, `unmapped_columns`, `ambiguous_columns`, `notes`.
+- **`WeftColumnMapping`** — per source column: `target_column`, `confidence`, `reason`, `action` (`map` \| `ignore` \| `needs_review`), **`target_spark_type`**, **`nullable`**, decimal precision/scale, **`temporal_parse_strategy`** (`native` \| `spark_formats` \| `python_dateutil`), **`spark_timestamp_formats`**, **`python_dateutil_fuzzy`**.
+- **`WeftWarning`** — advisories for casts, missing canonical fields, and fuzzy date UDF use (filter with `warnings.filterwarnings`).
+
+### Performance and safety notes
+
+- **Single scan for the canonical projection:** renames and casts are expressed as one `select` of column expressions (plus optional extra columns).
+- **dateutil** runs inside a **Python UDF** only when the validated model output sets `temporal_parse_strategy` to `python_dateutil`; prefer `spark_formats` with explicit patterns when possible.
+- **Token usage:** successful Weft HTTP calls attach **`llm_token_usage`** to the report and emit **`RaijuLLMUsageWarning`** the same way profiling enrichment does.
+
 ## DataFrame profiling
 
 `profile_dataframe` (and `Raiju.profile`) summarize a PySpark `DataFrame` with **Spark-native aggregates**—one wide `agg` over the input for most metrics, plus optional **`freqItems`** and optional **driver-side LLM enrichment** when you attach `InferenceSettings` and opt in. This path is built for throughput: it does **not** scan the table in a Python row UDF to compute column stats.
@@ -361,6 +432,8 @@ Import from `raiju` or `raiju.inference`:
 
 - **`ProfileEnrichmentResponse`** — root object with `columns: list[ProfileEnrichmentColumn]`.
 - **`ProfileEnrichmentColumn`** — one column’s LLM fields (`human_summary`, `suggested_validation_regex`, `java_simple_date_format`, `python_strptime_directive`, `pii_likelihood`, …).
+- **`WeftResponse`** / **`WeftColumnMapping`** — Weft LLM JSON contract (see [Weft](#weft-llm-schema-aliasing-and-typing)).
+- **`WeftWarning`** — Weft-specific advisory warnings.
 - **`LLMTokenUsage`** — normalized token fields plus `raw_usage` (`tiktoken` metadata + `api` blob).
 
 ### `profile_to_describe_rows`
@@ -438,7 +511,7 @@ print(usage.total_tokens, usage.model_dump()["raw_usage"]["tiktoken"]["encoding"
 
 - **No hardcoded API surface:** `Raiju` and its builder use `__getattr__` to forward to the real `SparkSession` (and `SparkSession.builder`).
 - **Single entry point:** You hold a `Raiju` instance; `.read`, `.sql`, `.range`, and the rest behave as in PySpark.
-- **Composable helpers:** `weave` and `profile` / `profile_dataframe` live on `Raiju` (or as module functions) without replacing `DataFrame` types.
+- **Composable helpers:** `weave`, `weft`, `profile` / `profile_dataframe`, and `weft_dataframe` / `resolve_weft_mappings` live on `Raiju` or as module functions without replacing `DataFrame` types.
 - **Thin foundation:** This layer is the base for future orchestration and enrichment utilities without forking PySpark.
 
 ## Development
