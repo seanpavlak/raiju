@@ -15,7 +15,7 @@ Raiju should read as **orchestration and execution infrastructure for complex di
 | D1 | **Execution overview diagram** | Spark driver → Raiju coordination (future) → executors; what runs where. |
 | D2 | **DAG / stage diagram** | How a Raiju-orchestrated pipeline maps to Spark jobs, stages, and tasks once orchestration exists. |
 | D3 | **Executor data flow** | Partition travel, shuffle boundaries, where UDFs execute. |
-| D4 | **Local vs remote inference architecture** | Ollama vs OpenRouter (or similar); privacy, cost, and network boundaries. |
+| D4 | **Local vs remote inference architecture** | **Partial:** README covers Ollama vs OpenRouter, bounded payloads, and `inference_chat`; a dedicated architecture diagram / threat-model page is still open. |
 | D5 | **Failure handling guide** | Task failures, stage retries, executor loss, speculative execution interaction. |
 | D6 | **Retry semantics** | Idempotency expectations, which layers retry, alignment with Spark’s task retries. |
 | D7 | **Partitioning behavior** | When repartition/coalesce is required, skew, partition count guidance for enrichment stages. |
@@ -30,7 +30,7 @@ Raiju should read as **orchestration and execution infrastructure for complex di
 | O2 | **Explicit execution context** | Config, run IDs, logging hooks, correlation across stages. |
 | O3 | **Stage boundaries and Spark action policy** | Document and optionally enforce where materialization happens to avoid surprise full scans. |
 | O4 | **Reusable transformation modules** | Conventions for packaging UDFs + SQL + Python transforms as importable units. |
-| O5 | **Testing utilities** | Local Spark fixtures, small golden datasets, property-style tests for transforms. |
+| O5 | **Testing utilities** | **Partial:** growing `tests/` for weft, profiling, `inference_chat`, and join helpers; reusable Spark session fixtures / golden datasets as a **library** export still open. |
 
 ## UDF and enrichment workflows
 
@@ -45,11 +45,17 @@ Raiju should read as **orchestration and execution infrastructure for complex di
 
 | ID | Item | Notes |
 |----|------|--------|
-| I0 | **Session-scoped inference settings** | **Done (initial):** `InferenceSettings` / `OllamaConfig` / `OpenRouterConfig` on `Raiju(..., inference=...)` and `with_inference()`; no I/O. |
-| I1 | **Pluggable inference backend** | Interface + reference implementations (e.g. HTTP to Ollama, OpenRouter-compatible client). |
+| I0 | **Session-scoped inference settings** | **Done:** `InferenceSettings` / `OllamaConfig` / `OpenRouterConfig` on `Raiju(..., inference=...)` and `with_inference()`; construction does no I/O; base URLs validated (`http`/`https` + host). |
+| I1 | **Pluggable inference backend** | **Partial:** `raiju.inference.chat.inference_chat` implements shared Ollama + OpenRouter HTTP used by **Weft** and **profile LLM enrichment**; a formal swap-your-own *provider interface* (without forking helpers) is still open. |
 | I2 | **Hybrid execution policy** | Per-row, per-partition, or sampled routing between local and remote. |
-| I3 | **Backpressure and quotas** | Concurrency caps, timeouts, circuit breaking for remote APIs. |
-| I4 | **Example workloads only** | Semantic enrichment, fuzzy classification, entity normalization—documented as data engineering tasks, not “agents.” |
+| I3 | **Backpressure and quotas** | **Partial:** per-call `http_timeout_s` (must be positive), validated `provider` (`auto` / `ollama` / `openrouter`); no circuit breaker, global concurrency caps, or adaptive throttling yet. |
+| I4 | **Example workloads only** | **Partial:** README + module docs frame profiling / Weft as data-engineering tasks; more worked examples and notebooks still useful. |
+
+### Shipped inference-related surface (v0.1.x)
+
+- [x] **Weft** — bounded driver LLM + `WeftResponse` / `WeftColumnMapping` (Pydantic), guardrails, optional Spark casts in one `select` (`weft_dataframe`, `Raiju.weft`, `resolve_weft_mappings`, `raiju.weft_types`).
+- [x] **Profile LLM enrichment** — bounded aggregates + samples, `ProfileEnrichmentResponse` validation, fail-soft warnings on bad model output (`profile_dataframe` / `Raiju.profile`).
+- [x] **`raiju.inference.chat`** — `inference_chat`, `parse_llm_json_object`, `truncate_llm_text` (re-exported from `raiju`).
 
 ## Hardening and operations
 
@@ -63,7 +69,7 @@ Raiju should read as **orchestration and execution infrastructure for complex di
 
 | ID | Item | Notes |
 |----|------|--------|
-| E1 | **Optional extras** | `pip install raiju[inference]` (or similar) so core stays lean. |
+| E1 | **Optional extras** | `pip install raiju[dev]` exists for lint/tests; splitting **inference-only** extras if the runtime stack grows is still open. |
 | E2 | **Versioning policy** | Spark minor versions, Python floor, deprecation process. |
 | E3 | **Changelog discipline** | User-visible behavior and performance called out per release. |
 
@@ -75,6 +81,11 @@ Per project positioning: avoid hype terms that read as “AI product” rather t
 
 ## Current baseline (v0.1.2)
 
-The shipped library is a **SparkSession-compatible entry point** with full API delegation. Roadmap items above describe the direction for higher-level orchestration and optional inference while **preserving Spark-native execution**.
+The shipped library is a **SparkSession-compatible entry point** with full API delegation, plus **Weft**, **Weave**, **DataFrame profiling** (optional LLM enrichment), and **`raiju.inference.chat`** as the shared bounded HTTP path for Ollama/OpenRouter. Roadmap rows above are mostly **extensions** (orchestration layer, diagrams, hardening) on top of that baseline.
+
+### Shipped non-inference helpers
+
+- [x] **Weave** — `weave` / `Raiju.weave`, `BroadcastJoinPolicy`, bounded `limit(n).count()`-style hints for broadcast joins.
+- [x] **DataFrame profiling (Spark core)** — `profile_dataframe` / `Raiju.profile` Spark-native aggregates (LLM path is listed under inference above).
 
 Contributors: pick an item, open a discussion or draft PR with a minimal vertical slice (docs + tests, or a small API with examples).

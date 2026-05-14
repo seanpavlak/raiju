@@ -6,122 +6,22 @@ Uses tiny bounded samples plus precomputed aggregates — never ships whole tabl
 from __future__ import annotations
 
 import json
-import re
 import time
-import urllib.error
-import urllib.request
 import warnings
 from typing import Any
 
 from pydantic import ValidationError
 
+from raiju.inference.chat import (
+    inference_chat,
+    parse_llm_json_object,
+    truncate_llm_text,
+)
 from raiju.inference.llm_schemas import (
     LLMTokenUsage,
     ProfileEnrichmentResponse,
 )
 from raiju.inference.settings import InferenceSettings
-from raiju.inference.token_count import build_llm_token_usage
-
-_JSON_FENCE = re.compile(r"```(?:json)?\s*([\s\S]*?)\s*```", re.IGNORECASE)
-
-
-def _truncate(s: str, max_len: int) -> str:
-    if len(s) <= max_len:
-        return s
-    return s[: max_len - 3] + "..."
-
-
-def _http_json_post(
-    url: str,
-    payload: dict[str, Any],
-    headers: dict[str, str],
-    timeout: float,
-) -> dict[str, Any]:
-    data = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(
-        url,
-        data=data,
-        method="POST",
-        headers={**headers, "Content-Type": "application/json"},
-    )
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        body = resp.read().decode("utf-8")
-    return json.loads(body)
-
-
-def _ollama_chat(
-    base: str,
-    model: str,
-    system: str,
-    user: str,
-    timeout: float,
-) -> tuple[str, dict[str, Any]]:
-    url = f"{base.rstrip('/')}/api/chat"
-    j = _http_json_post(
-        url,
-        {
-            "model": model,
-            "stream": False,
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-        },
-        {},
-        timeout,
-    )
-    msg = j.get("message") or {}
-    return str(msg.get("content") or ""), j
-
-
-def _openrouter_chat(
-    base: str,
-    model: str,
-    api_key: str,
-    system: str,
-    user: str,
-    timeout: float,
-) -> tuple[str, dict[str, Any]]:
-    url = f"{base.rstrip('/')}/chat/completions"
-    j = _http_json_post(
-        url,
-        {
-            "model": model,
-            "temperature": 0,
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-        },
-        {
-            "Authorization": f"Bearer {api_key}",
-        },
-        timeout,
-    )
-    choices = j.get("choices") or []
-    if not choices:
-        return "", j
-    msg = choices[0].get("message") or {}
-    return str(msg.get("content") or ""), j
-
-
-def _extract_json_object(text: str) -> dict[str, Any] | None:
-    t = text.strip()
-    m = _JSON_FENCE.search(t)
-    if m:
-        t = m.group(1).strip()
-    try:
-        return json.loads(t)
-    except json.JSONDecodeError:
-        pass
-    start = t.find("{")
-    end = t.rfind("}")
-    if start >= 0 and end > start:
-        try:
-            return json.loads(t[start : end + 1])
-        except json.JSONDecodeError:
-            return None
-    return None
 
 
 def _collect_samples_batch(
@@ -154,13 +54,15 @@ def _collect_samples_batch(
                 continue
             seen[n].add(key)
             if isinstance(v, str):
-                results[n].append(_truncate(v, max_value_chars))
+                results[n].append(truncate_llm_text(v, max_value_chars))
             elif isinstance(v, bytes):
                 results[n].append(
-                    _truncate(v.decode("utf-8", errors="replace"), max_value_chars)
+                    truncate_llm_text(
+                        v.decode("utf-8", errors="replace"), max_value_chars
+                    )
                 )
             else:
-                results[n].append(_truncate(str(v), max_value_chars))
+                results[n].append(truncate_llm_text(str(v), max_value_chars))
     return results
 
 
@@ -305,80 +207,19 @@ def attach_profile_llm_enrichment(
     }
     user_text = json.dumps(user_payload, default=str)
 
-    model_ollama = "llama3.2"
-    model_or = "openai/gpt-4o-mini"
-    if settings.ollama and settings.ollama.default_model:
-        model_ollama = settings.ollama.default_model
-    if settings.openrouter and settings.openrouter.default_model:
-        model_or = settings.openrouter.default_model
-
     text = ""
     used = ""
     usage: LLMTokenUsage | None = None
     t0 = time.perf_counter()
     try:
-        use_ollama = False
-        use_openrouter = False
-        if provider == "ollama":
-            use_ollama = bool(settings.ollama)
-        elif provider == "openrouter":
-            use_openrouter = bool(settings.openrouter)
-        else:
-            if settings.ollama:
-                use_ollama = True
-            elif settings.openrouter:
-                use_openrouter = True
-
-        if use_ollama:
-            if not settings.ollama:
-                raise RuntimeError(
-                    "Ollama selected but not configured on InferenceSettings"
-                )
-            text, raw = _ollama_chat(
-                settings.ollama.resolved_base_url(),
-                model_ollama,
-                _SYSTEM_PROMPT,
-                user_text,
-                http_timeout_s,
-            )
-            used = f"ollama:{model_ollama}"
-            usage = build_llm_token_usage(
-                provider="ollama",
-                model=model_ollama,
-                system=_SYSTEM_PROMPT,
-                user=user_text,
-                assistant=text,
-                raw_api_response=raw,
-            )
-        elif use_openrouter:
-            if not settings.openrouter:
-                raise RuntimeError(
-                    "OpenRouter selected but not configured on InferenceSettings"
-                )
-            key = settings.openrouter.resolved_api_key()
-            if not key:
-                raise RuntimeError("OpenRouter API key missing")
-            text, raw = _openrouter_chat(
-                settings.openrouter.resolved_base_url(),
-                model_or,
-                key,
-                _SYSTEM_PROMPT,
-                user_text,
-                http_timeout_s,
-            )
-            used = f"openrouter:{model_or}"
-            usage = build_llm_token_usage(
-                provider="openrouter",
-                model=model_or,
-                system=_SYSTEM_PROMPT,
-                user=user_text,
-                assistant=text,
-                raw_api_response=raw,
-            )
-        else:
-            raise RuntimeError(
-                f"No inference backend available for enrichment (provider={provider!r})"
-            )
+        used, text, usage = inference_chat(
+            settings,
+            system=_SYSTEM_PROMPT,
+            user=user_text,
+            provider=provider,
+            http_timeout_s=http_timeout_s,
+            purpose="profile enrichment",
+        )
     except Exception as e:  # noqa: BLE001 — network, JSON, model quirks
         warnings.warn(
             f"Raiju profile LLM enrichment failed ({used or provider}): {e}",
@@ -401,7 +242,7 @@ def attach_profile_llm_enrichment(
         usage.warn_if_known()
         out["llm_token_usage"] = usage.model_dump(mode="json", exclude_none=True)
 
-    parsed = _extract_json_object(text)
+    parsed = parse_llm_json_object(text)
     if not parsed or not isinstance(parsed.get("columns"), list):
         warnings.warn(
             "Raiju profile LLM enrichment returned unparseable JSON; "
@@ -412,7 +253,7 @@ def attach_profile_llm_enrichment(
         out["llm_enrichment"] = {
             "status": "failed",
             "error": "unparseable_model_output",
-            "raw_response_excerpt": _truncate(text, 800),
+            "raw_response_excerpt": truncate_llm_text(text, 800),
             "provider": used,
             "elapsed_ms": round(elapsed_ms, 2),
             "token_usage": out.get("llm_token_usage"),

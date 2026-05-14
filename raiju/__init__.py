@@ -16,6 +16,9 @@ from raiju.inference import (
     WeftResponse,
     WeftWarning,
     build_llm_token_usage,
+    inference_chat,
+    parse_llm_json_object,
+    truncate_llm_text,
 )
 from raiju.joins import BroadcastJoinPolicy, weave
 from raiju.profile import ProfileOptions, profile_dataframe, profile_to_describe_rows
@@ -37,9 +40,12 @@ __all__ = [
     "WeftResponse",
     "WeftWarning",
     "build_llm_token_usage",
+    "inference_chat",
+    "parse_llm_json_object",
     "profile_dataframe",
     "profile_to_describe_rows",
     "resolve_weft_mappings",
+    "truncate_llm_text",
     "weave",
     "weft_dataframe",
 ]

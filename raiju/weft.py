@@ -13,14 +13,13 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from raiju.inference.llm_schemas import LLMTokenUsage, WeftResponse
-from raiju.inference.profile_enrichment import (
-    _extract_json_object,
-    _ollama_chat,
-    _openrouter_chat,
+from raiju.inference.chat import (
+    inference_chat,
+    parse_llm_json_object,
+    truncate_llm_text,
 )
+from raiju.inference.llm_schemas import WeftResponse
 from raiju.inference.settings import InferenceSettings
-from raiju.inference.token_count import build_llm_token_usage
 from raiju.profile import _type_name
 from raiju.weft_types import weft_canonical_select
 
@@ -75,12 +74,6 @@ _WEFT_SYSTEM = (
 )
 
 
-def _trunc_str(s: str, max_len: int) -> str:
-    if len(s) <= max_len:
-        return s
-    return s[: max_len - 3] + "..."
-
-
 def _scan_column_evidence(
     df: Any,
     *,
@@ -120,7 +113,7 @@ def _scan_column_evidence(
             if key in seen or len(samples) >= max_distinct_samples:
                 continue
             seen.add(key)
-            samples.append(_trunc_str(text, max_value_chars))
+            samples.append(truncate_llm_text(text, max_value_chars))
         tn = _type_name(f.dataType)
         out.append(
             {
@@ -135,89 +128,6 @@ def _scan_column_evidence(
     return out, n
 
 
-def _run_weft_llm(
-    settings: InferenceSettings,
-    user_text: str,
-    *,
-    provider: str,
-    http_timeout_s: float,
-) -> tuple[str, str, LLMTokenUsage | None]:
-    """Returns (provider_label, assistant_text, token_usage)."""
-    model_ollama = "llama3.2"
-    model_or = "openai/gpt-4o-mini"
-    if settings.ollama and settings.ollama.default_model:
-        model_ollama = settings.ollama.default_model
-    if settings.openrouter and settings.openrouter.default_model:
-        model_or = settings.openrouter.default_model
-
-    text = ""
-    used = ""
-    usage: LLMTokenUsage | None = None
-    use_ollama = False
-    use_openrouter = False
-    if provider == "ollama":
-        use_ollama = bool(settings.ollama)
-    elif provider == "openrouter":
-        use_openrouter = bool(settings.openrouter)
-    else:
-        if settings.ollama:
-            use_ollama = True
-        elif settings.openrouter:
-            use_openrouter = True
-
-    if use_ollama:
-        if not settings.ollama:
-            raise RuntimeError(
-                "Ollama selected but not configured on InferenceSettings"
-            )
-        text, raw = _ollama_chat(
-            settings.ollama.resolved_base_url(),
-            model_ollama,
-            _WEFT_SYSTEM,
-            user_text,
-            http_timeout_s,
-        )
-        used = f"ollama:{model_ollama}"
-        usage = build_llm_token_usage(
-            provider="ollama",
-            model=model_ollama,
-            system=_WEFT_SYSTEM,
-            user=user_text,
-            assistant=text,
-            raw_api_response=raw,
-        )
-    elif use_openrouter:
-        if not settings.openrouter:
-            raise RuntimeError(
-                "OpenRouter selected but not configured on InferenceSettings"
-            )
-        key = settings.openrouter.resolved_api_key()
-        if not key:
-            raise RuntimeError("OpenRouter API key missing")
-        text, raw = _openrouter_chat(
-            settings.openrouter.resolved_base_url(),
-            model_or,
-            key,
-            _WEFT_SYSTEM,
-            user_text,
-            http_timeout_s,
-        )
-        used = f"openrouter:{model_or}"
-        usage = build_llm_token_usage(
-            provider="openrouter",
-            model=model_or,
-            system=_WEFT_SYSTEM,
-            user=user_text,
-            assistant=text,
-            raw_api_response=raw,
-        )
-    else:
-        raise RuntimeError(
-            f"No inference backend available for weft (provider={provider!r})"
-        )
-    return used, text, usage
-
-
 def _validate_llm_targets(
     resp: WeftResponse,
     allowed: set[str],
@@ -229,17 +139,6 @@ def _validate_llm_targets(
             issues.append(
                 f"{m.source_column!r}: map target {m.target_column!r} not in schema"
             )
-        if (
-            m.target_column is not None
-            and m.target_column not in allowed
-            and m.action != "ignore"
-        ):
-            if m.action == "needs_review":
-                pass  # nullable / out-of-schema guess ok for review
-            elif m.action == "map":
-                pass  # already captured
-            else:
-                issues.append(f"{m.source_column!r}: unexpected target outside schema")
     return issues
 
 
@@ -466,18 +365,20 @@ def weft_dataframe(
 
     user_text = json.dumps(user_payload, default=str)
     t0 = time.perf_counter()
-    used, text, usage = _run_weft_llm(
+    used, text, usage = inference_chat(
         inference,
-        user_text,
+        system=_WEFT_SYSTEM,
+        user=user_text,
         provider=provider,
         http_timeout_s=float(http_timeout_s),
+        purpose="weft",
     )
     elapsed_ms = (time.perf_counter() - t0) * 1000.0
 
     if usage is not None:
         usage.warn_if_known()
 
-    parsed = _extract_json_object(text)
+    parsed = parse_llm_json_object(text)
     if not parsed or not isinstance(parsed.get("mappings"), list):
         raise ValueError(
             "weft model returned unparseable JSON (expected object with mappings list)"

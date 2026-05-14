@@ -1,1 +1,6 @@
+# Runtime dependencies (aligned with pyproject.toml [project.dependencies]).
+# CI and recommended dev setup: pip install -e ".[dev]"
 pyspark>=4.0.0
+pydantic>=2.5.0
+python-dateutil>=2.8.0
+tiktoken>=0.7.0

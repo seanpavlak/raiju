@@ -89,7 +89,7 @@ Example workload types (all squarely “data engineering”):
 
 Language in the project intentionally stays **grounded**: orchestration, enrichment, inference **hooks**—not hype around autonomy or “cognitive” stacks.
 
-You can **initialize `Raiju` with provider settings** (endpoints, default models, OpenRouter key resolution) so later orchestration can call into Ollama or OpenRouter without ad-hoc globals. Constructing `InferenceSettings` performs **no HTTP requests**—it only holds configuration. **Bounded driver-side HTTP** runs when you opt in to **[DataFrame profiling](#dataframe-profiling)** LLM enrichment or **[Weft](#weft-llm-schema-aliasing-and-typing)** canonicalization—both use **Pydantic**-validated model JSON, not free-form parsing.
+You can **initialize `Raiju` with provider settings** (endpoints, default models, OpenRouter key resolution) so later orchestration can call into Ollama or OpenRouter without ad-hoc globals. Constructing `InferenceSettings` performs **no HTTP requests**—it only holds configuration. **Bounded driver-side HTTP** runs when you opt in to **[DataFrame profiling](#dataframe-profiling)** LLM enrichment or **[Weft](#weft-llm-schema-aliasing-and-typing)** canonicalization—both use **Pydantic**-validated model JSON, not free-form parsing. The same transport and JSON-object parsing live in **`raiju.inference.chat`** and are re-exported from **`raiju`** as **`inference_chat`**, **`parse_llm_json_object`**, and **`truncate_llm_text`** for custom tools or tests.
 
 ## Example workloads
 
@@ -114,6 +114,7 @@ Raiju is aimed at teams building **operational data systems** where jobs look li
 - **`weave` joins:** optional `broadcast()` hints when one side is much smaller than the other, using bounded row-count inference (see [Weave (broadcast-friendly joins)](#weave-broadcast-friendly-joins)).
 - **Weft (schema prep):** `weft_dataframe` / `Raiju.weft` map messy source columns onto a **canonical dict-of-fields** you define, using **one bounded LLM call** plus **Pydantic** (`WeftResponse` / `WeftColumnMapping`), confidence guardrails, optional **Spark-native casts** (single `select`), optional **`python-dateutil`** fuzzy timestamps when the model requests that path, and optional **struct** output. See [Weft (LLM schema aliasing and typing)](#weft-llm-schema-aliasing-and-typing).
 - **DataFrame profiling:** `profile_dataframe` / `Raiju.profile` compute rich per-column stats in Spark-native aggregates (optional `freqItems`, optional bounded **LLM** enrichment with **Pydantic**-validated JSON and **tiktoken** token estimates). See [DataFrame profiling](#dataframe-profiling).
+- **Inference transport (library API):** `inference_chat`, `parse_llm_json_object`, and `truncate_llm_text` from `raiju` (implemented in `raiju.inference.chat`) — same Ollama/OpenRouter routing, timeouts, and JSON fence handling Weft and profiling use; useful for bespoke prompts outside those entry points.
 - **Runtime dependencies:** `pyspark>=4.0`, `pydantic>=2.5`, `tiktoken>=0.7`, `python-dateutil>=2.8` (dateutil is used when Weft applies a model-requested fuzzy-parse strategy; profiling does not require it for core stats).
 
 Higher-level orchestration beyond Weft, profiling, `weave`, generic HTTP inference clients, and operational guides are **on the roadmap** ([ROADMAP.md](ROADMAP.md)).
@@ -355,7 +356,8 @@ The module function `weft_dataframe(df, structure, inference, ...)` is the same 
 | `struct_name` | `"weft"` | Struct column name when `output="struct"`. |
 | `keep_extra_columns` | `False` | Append unmapped, non-ignored source columns after the canonical block (still one `select`). |
 | `emit_weft_warnings` | `True` | Emit **`WeftWarning`** for missing canonical slots, dateutil throughput, default date formats, etc. |
-| `provider` | `"auto"` | `"ollama"`, `"openrouter"`, or `"auto"` (prefer Ollama if configured). |
+| `provider` | `"auto"` | `"ollama"`, `"openrouter"`, or `"auto"` (prefer Ollama if configured); normalized case-insensitively. |
+| `http_timeout_s` | `120` | Per-request HTTP timeout for the Weft LLM call (must be positive). |
 | `sample_scan_limit` / `max_sample_values` / `max_value_chars` | `120` / `14` / `280` | Bound the evidence payload sent to the model. |
 
 ### Pydantic contract (Weft)
@@ -484,6 +486,27 @@ assert prof.get("llm_enrichment", {}).get("status") in ("ok", "failed")
 print(prof.get("llm_token_usage"))  # tiktoken-based totals when HTTP succeeded
 ```
 
+### Advanced: reuse the same chat transport
+
+Weft and profiling both call **`inference_chat`** under the hood. For a **custom** system prompt and user payload (still one bounded request), use the same API and token accounting:
+
+```python
+from raiju import InferenceSettings, OllamaConfig, inference_chat
+
+inf = InferenceSettings(ollama=OllamaConfig(default_model="llama3.2"))
+used, text, usage = inference_chat(
+    inf,
+    system="You reply with a single JSON object only.",
+    user='{"task": "ping"}',
+    provider="auto",
+    http_timeout_s=60.0,
+    purpose="my_tool",
+)
+# `usage` is normally present; call usage.warn_if_known() like Weft does after a successful call.
+```
+
+**`parse_llm_json_object`** strips optional Markdown JSON fences and returns a **dict** or `None` if the model did not return a JSON object. **`truncate_llm_text`** caps strings for prompts and logs.
+
 ### Advanced: count tokens outside profiling
 
 If you have raw strings (for example from another tool), you can reuse the same accounting Raiju uses after HTTP:
@@ -511,7 +534,7 @@ print(usage.total_tokens, usage.model_dump()["raw_usage"]["tiktoken"]["encoding"
 
 - **No hardcoded API surface:** `Raiju` and its builder use `__getattr__` to forward to the real `SparkSession` (and `SparkSession.builder`).
 - **Single entry point:** You hold a `Raiju` instance; `.read`, `.sql`, `.range`, and the rest behave as in PySpark.
-- **Composable helpers:** `weave`, `weft`, `profile` / `profile_dataframe`, and `weft_dataframe` / `resolve_weft_mappings` live on `Raiju` or as module functions without replacing `DataFrame` types.
+- **Composable helpers:** `weave`, `weft`, `profile` / `profile_dataframe`, `weft_dataframe` / `resolve_weft_mappings`, and **`inference_chat`** / **`parse_llm_json_object`** / **`truncate_llm_text`** live on `Raiju` or as module functions without replacing `DataFrame` types.
 - **Thin foundation:** This layer is the base for future orchestration and enrichment utilities without forking PySpark.
 
 ## Development

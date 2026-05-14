@@ -2,24 +2,24 @@
 
 import pytest
 from pydantic import ValidationError
+from raiju.inference.chat import parse_llm_json_object
 from raiju.inference.llm_schemas import (
     LLMTokenUsage,
     ProfileEnrichmentColumn,
     ProfileEnrichmentResponse,
     RaijuLLMUsageWarning,
 )
-from raiju.inference.profile_enrichment import _extract_json_object
 from raiju.inference.token_count import build_llm_token_usage
 
 
-def test_extract_json_object_fenced():
+def test_parse_llm_json_object_fenced():
     raw = 'Here:\n```json\n{"columns": [{"column": "a"}]}\n```'
-    j = _extract_json_object(raw)
+    j = parse_llm_json_object(raw)
     assert j == {"columns": [{"column": "a"}]}
 
 
-def test_extract_json_object_plain():
-    j = _extract_json_object('  {"x": 1} trailing ')
+def test_parse_llm_json_object_plain():
+    j = parse_llm_json_object('  {"x": 1} trailing ')
     assert j == {"x": 1}
 
 
